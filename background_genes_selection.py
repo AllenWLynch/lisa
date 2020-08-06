@@ -112,28 +112,3 @@ def process_gene_lists(query_genes, gene_metadata, TAD_data, num_selected = 3000
         background_list = random_background_genes(background_candidates, num_selected)
 
     return create_label_vector(query_list, background_list)
-
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
-
-
