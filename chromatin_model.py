@@ -55,15 +55,7 @@ def select_best_datasets_ANOVA(reg_potential_data, labels, k_features = 200):
 
     return selected
 
-
-def fit_chromatin_model(reg_potential_data, labels, model):
-
-    assert( isinstance(model, GridSearchCV) ), "Model provided must be of GridSearchCV class"
-    model.fit(reg_potential_data, labels)
-    #return best estimator fitted, along with its metric score and model hyperparameters
-    return model.best_estimator_, model.best_score_
-
-def build_chromatin_model(reg_potential_data, labels, chromatin_model, covariates = None, 
+def build_chromatin_model(reg_potential_data, dataset_metadata, labels, chromatin_model, covariates = None, 
     num_anova_features = 200, epsilon = 1e-7, num_lr_features = 10, max_iters = 20, penalty_min = -1, penalty_max = 10):
     """
     reg_potential_data: numpy matrix of gene x sample of RP data
@@ -74,12 +66,17 @@ def build_chromatin_model(reg_potential_data, labels, chromatin_model, covariate
     """
     assert( isinstance(reg_potential_data, np.array ) ), 'Regulatory potential data must be provided as numpy array'
     assert( isinstance(labels, np.array) ), 'Labels provided must be of type numpy array'
+    assert( isinstance(dataset_metadata, list, np.array))
+    assert( dataset_metadata.shape[0] == reg_potential_data.shape[0] and len(dataset_metadata.shape) == 1)
+
+    dataset_metadata = np.array(dataset_metadata)
 
     #select features with anova
     anova_featues = select_best_datasets_ANOVA(reg_potential_data, labels, k_features = num_anova_features)
 
     #leave out worst features
     reg_potential_data = reg_potential_data[:, anova_featues]
+    dataset_metadata = dataset_metadata[anova_featues]
 
     #select best features using LR, record some info about model
     lr_features, selection_model = select_best_datasets_LR_model(reg_potential_data, labels, epsilon=epsilon, num_datasets=num_lr_features, 
@@ -87,17 +84,36 @@ def build_chromatin_model(reg_potential_data, labels, chromatin_model, covariate
 
     #subset for best features
     reg_potential_data = reg_potential_data[:, lr_features] 
+    dataset_metadata = dataset_metadata[lr_features]
 
     #add covariates back to data
     if not covariates is None:
         reg_potential_data = np.concatenate([reg_potential_data, covariates], axis = 1)
 
     #train chromatin landscape model
-    chromatin_model, best_chromatin_score = fit_chromatin_model(reg_potential_data, labels, chromatin_model)
+    chromatin_model.fit(reg_potential_data, labels, chromatin_model)
 
     #return final trained model, the selected features, and some model metadata
-    return chromatin_model, reg_potential_data, selection_model.coef_, {
-        'selection_model_params' : selection_model.get_params(),
-        'chromatin_model_params' : chromatin_model.get_params()
-        'chromatin_model_score' : best_chromatin_score,
-    }
+    return reg_potential_data, dataset_metadata, selection_model
+
+
+class ChromatinModel():
+    def __init__(self):
+        raise NotImplementedError("Must implement \"__init__\" method of ChromatinModel")
+    def fit(self):
+        raise NotImplementedError("Must implement \"fit\" method of ChromatinModel")
+    def get_deltaRP_activation(self):
+        raise NotImplementedError("Must implement \"get_deltaRP_activation\" method of ChromatinModel")
+
+
+class LogisticRegressionChromatinModel(ChromatinModel):
+
+    def __init__(self, param_grid, kfold_cv = 4, scoring = 'auc', **regression_kwargs):
+        classifier = LogisticRegression(**regression_kwargs)
+        self.model = GridSearchCV(classifier, param_grid = param_grid, scoring = scoring, cv = kfold_cv)
+
+    def fit(self, X, y):
+        self.model.fit(X, y)
+    
+    def get_deltaRP_activation(self, X):
+        return np.dot(X, self.model.best_estimator_.coef_.reshape((-1, 1)))
