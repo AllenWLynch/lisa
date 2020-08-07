@@ -4,7 +4,8 @@ from sklearn.feature_selection import SelectKBest, f_classif
 from sklearn.model_selection import GridSearchCV
 import numpy as np
 
-def midpoint(low, high): return (high - low) / 2
+
+#### ADD DATASET NORMALIZATION
 
 def select_best_datasets_LR_model(reg_potential_data, labels, epsilon = 1e-7, num_datasets = 10, max_iters = 100, penalty_min = -1, penalty_max = 10):
     """
@@ -16,33 +17,39 @@ def select_best_datasets_LR_model(reg_potential_data, labels, epsilon = 1e-7, nu
     max_iters: maximum iterations of binary search
     penalty_min: penalty of LR model defined as C = 2**-penalty, with decreasing C meaning increasing regularization. For penalty_min = -1, C = 2^(-1 * 1) = 2, so less regularized.
     penalty_max: penalty of LR model, for penalty_max = 10, C = 2^-10, a very regularized model
+
+    returns:
+    best_datasets: boolean index of datasets selected
     """
     LR_model_kwargs = dict(
             penalty='l1', tol=0.01, dual=False, random_state=999
         )
 
-    penalty = midpoint(penalty_min, penalty_max)
-
-    for _ in range(max_iters):
-        #define a model using the fixed parameters chosen in LR_model_kwargs
+    def binary_search(low, high, iters = 0, num_datasets_desired = 10, max_iters = 50):
+        #instantiate model with penalty as middle of current window
+        penalty = (high - low) / 2
         latest_model = LogisticRegression(C=2**-penalty, **LR_model_kwargs).fit(reg_potential_data, labels)
         coefs = latest_model.coef_
         #get upweighted datasets
         best_datasets = coefs > epsilon
         #how many datasets were used?
         num_datasets_selected = best_datasets.sum()
-        #break if the desired amount of datasets were used
-        if num_datasets_selected == num_datasets:
-            break
+        #break if the desired amount of datasets were used or max iters reached
+        if num_datasets_selected == num_datasets_desired or iters == max_iters: 
+            return best_datasets, latest_model
+        #increment number of iters
+        search_kwargs = dict(
+            num_datasets_desired = num_datasets_desired, iters = iters += 1, max_iters = max_iters
+        )
+        #if too many datasets used, shift window to increase penalty
+        if num_datasets_selected > num_datasets:
+            #start new search with moved window
+            return binary_search(penalty, high, **search_kwargs)
         else:
-            #update binary search parameters
-            if num_datasets_selected > num_datasets:
-                penalty_max = midpoint
-            else:
-                penalty_min = midpoint
-            penalty = midpoint(penalty_min, penalty_max)
+            #decrease penalty if too few datasets used
+            return binary_search(low, penalty, **search_kwargs)
 
-    return best_datasets, latest_model
+    return binary_search(penalty_min, penalty_max, max_iters = max_iters, num_datasets_desired = num_datasetsß)
 
 
 def select_best_datasets_ANOVA(reg_potential_data, labels, k_features = 200):
