@@ -43,6 +43,7 @@ def get_delta_regulation(datasets, ChIP_per_bin, rp_matrix, chromatin_model):
 
     assert( isinstance(chromatin_model, ChromatinModel) )
 
+    #potentially multi-thread this
     datacube = np.concatenate(
         [calculate_dataset_deltaRP(dataset, ChIP_per_bin, rp_matrix) # genes x TFs
             for dataset in datasets],
