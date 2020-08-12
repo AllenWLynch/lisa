@@ -1,7 +1,7 @@
 
 import numpy as np
 from scipy import sparse, stats
-from chromatin_model import ChromatinModel
+from models import ChromatinModel
 
 
 def calculate_dataset_deltaRP(reads_per_bin, ChIP_per_bin, rp_matrix):
@@ -11,11 +11,8 @@ def calculate_dataset_deltaRP(reads_per_bin, ChIP_per_bin, rp_matrix):
     ChIP_per_bin: (num_bins, TFs), a sparse binary map showing bins that contain a chip-seq or motif peak to knock out
     rp_matrix: (num_bins, genes), precalculated matrix mapping the reads in a bin to a regulatory score for each gene (this is a huge matrix)
     """
-    #validate sparse types
-    assert( isinstance(reads_per_bin, np.array )
-    assert( isinstance(ChIP_per_bin, sparse.csc_matrix) )
-    assert( isinstance(rp_matrix, sparse.csr_matrix) )
 
+    reads_per_bin = reads_per_bin.reshape((-1,1))
     #validate shapes
     num_bins = rp_matrix.shape[0]
     assert( reads_per_bin.shape == (num_bins, 1)) # bins x 1
@@ -25,7 +22,7 @@ def calculate_dataset_deltaRP(reads_per_bin, ChIP_per_bin, rp_matrix):
     # reads_per_TF^T \dot rp_matrix = deleted RP (TF x gene)
     # deleted RP^T (*) dataset_coeffcient = weighted delta RP (gene x TFs)
     # weighted delta RP + running_regression_total (just add this to a total and crunch one dataset at a time rather than build huge 3d datacube)
-    delta_rp = reads_per_bin.multiply(ChIP_per_bin).transpose().dot(rp_matrix).transpose().todense()[:, :, np.newaxis]
+    delta_rp = ChIP_per_bin.multiply(reads_per_bin).transpose().dot(rp_matrix).transpose().todense()[:, :, np.newaxis]
 
     return delta_rp
 
@@ -45,8 +42,8 @@ def get_delta_regulation(datasets, ChIP_per_bin, rp_matrix, chromatin_model):
 
     #potentially multi-thread this
     datacube = np.concatenate(
-        [calculate_dataset_deltaRP(dataset, ChIP_per_bin, rp_matrix) # genes x TFs
-            for dataset in datasets],
+        [np.array(calculate_dataset_deltaRP(dataset, ChIP_per_bin, rp_matrix)) # genes x TFs
+            for dataset in datasets.T],
         axis = 2
     )
 
@@ -54,7 +51,7 @@ def get_delta_regulation(datasets, ChIP_per_bin, rp_matrix, chromatin_model):
 
     isd_conditions = datacube.reshape((-1, num_samples)) # (genes + TFs) x samples
 
-    delta_regulation_score = chromatin_model.get_delta_regulation(isd_conditions).reshape(num_genes, num_TFs) # genes x TFs
+    delta_regulation_score = chromatin_model.get_deltaRP_activation(isd_conditions).reshape(num_genes, num_TFs) # genes x TFs
     
     return delta_regulation_score
 
@@ -71,7 +68,7 @@ def get_delta_regulation_significance(tf_delta_regulation_score, labels, alterna
     query_delta_rp = tf_delta_regulation_score[labels.astype(np.bool)]
     background_delta_rp = tf_delta_regulation_score[ ~labels.astype(np.bool) ]
 
-    return stats.wilcoxon(query_delta_rp, background_delta_rp, alternative = alternative)[1]
+    return stats.mannwhitneyu(query_delta_rp, background_delta_rp, alternative = alternative)[1]
 
 
 def get_insilico_deletion_significance(*, datasets, ChIP_per_bin, rp_matrix, chromatin_model, labels, alternative = 'greater'): #enforced kwargs
@@ -90,7 +87,9 @@ def get_insilico_deletion_significance(*, datasets, ChIP_per_bin, rp_matrix, chr
     delta_regulation_score = get_delta_regulation(datasets, ChIP_per_bin, rp_matrix, chromatin_model) # (genes, TFs)
 
     #apply the wilcoxon test on each TF
-    tf_p_vals = np.apply_along_axis(get_delta_regulation_significance, 0, delta_regulation_score) # (TFs, )
+    tf_p_vals = np.apply_along_axis(
+        lambda tf_profile : get_delta_regulation_significance(tf_profile, labels, alternative), 
+        0, delta_regulation_score) # output shape: (TFs, )
 
     return tf_p_vals
 
