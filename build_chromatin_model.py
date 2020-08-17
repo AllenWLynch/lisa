@@ -3,7 +3,7 @@ from sklearn.feature_selection import SelectKBest, f_classif
 from sklearn.preprocessing import StandardScaler
 import numpy as np
 
-def build_chromatin_model(reg_potential_data, dataset_metadata, labels, sample_selection_model, chromatin_model, covariates = None, 
+def build_chromatin_model(reg_potential_data, dataset_metadata, labels, sample_selection_model, chromatin_model, use_covariates = False, 
     num_anova_features = 200, n_jobs = 1):
     """
     reg_potential_data: numpy matrix of gene x sample of RP data
@@ -18,10 +18,12 @@ def build_chromatin_model(reg_potential_data, dataset_metadata, labels, sample_s
     #assert( isinstance(dataset_metadata, (list, np.array)))
     assert( reg_potential_data.shape == (len(labels), len(dataset_metadata)) )
 
-    #NORMALIZE THE DATA!
+    #NORMALIZE THE DATA
+    #take log2 of RP
+    reg_potential_data = np.log2(reg_potential_data + 1)
     normalizer = StandardScaler(with_std = False)
-
-    reg_potential_data = normalizer.fit_transform(np.log2(reg_potential_data + 1))
+    
+    reg_potential_data = normalizer.fit_transform(reg_potential_data)
     
     dataset_metadata = np.array(dataset_metadata)
 
@@ -43,11 +45,11 @@ def build_chromatin_model(reg_potential_data, dataset_metadata, labels, sample_s
     normalization_means = normalization_means[selected_features]
 
     #add covariates back to data
-    if not covariates is None:
+    if use_covariates and False:
         reg_potential_data = np.concatenate([reg_potential_data, covariates], axis = 1)
 
     #train chromatin landscape model
     chromatin_model.fit(reg_potential_data, labels, n_jobs)
 
     #return final trained model, the selected features' metadata (id), the sample selection model, chromatin model, and a normalization function
-    return reg_potential_data, dataset_metadata, sample_selection_model, chromatin_model, lambda x : x - normalization_means.reshape((1,-1))
+    return reg_potential_data, dataset_metadata, sample_selection_model, chromatin_model, lambda x : np.log2(x + 1) - normalization_means.reshape((1,-1))

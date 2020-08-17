@@ -16,6 +16,9 @@ from sklearn.base import BaseEstimator
 from sklearn.model_selection import GridSearchCV
 from sklearn.linear_model import LogisticRegression
 import numpy as np
+from sklearn.exceptions import ConvergenceWarning
+import warnings
+warnings.filterwarnings("ignore", category=ConvergenceWarning)
 
 
 class EstimatorInterface(BaseEstimator):
@@ -66,7 +69,6 @@ class LR_BinarySearch_SampleSelectionModel(SampleSelectionModel):
         #get upweighted datasets
         num_datasets_selected = self.get_num_selected_datasets()
 
-        #print('Low: {}, High: {}, Penalty: {}, Datasets: {}'.format(str(low), str(high),str(penalty), str(num_datasets_selected)))
         #break if the desired amount of datasets were used or max iters reached
         if num_datasets_selected == self.num_datasets_selected or iter_num == self.max_iters: 
             return self

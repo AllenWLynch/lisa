@@ -2,80 +2,19 @@
 import numpy as np
 from scipy import sparse, stats
 from models import ChromatinModel
+from utils import LoadingBar
+
+def get_delta_RP(profile, binding_data, rp_map):
+
+    return np.array(rp_map.dot(binding_data.multiply(profile.reshape((-1,1)))).todense())[:,:,np.newaxis]
 
 
-def calculate_dataset_deltaRP(reads_per_bin, ChIP_per_bin, rp_matrix):
+def get_insilico_deletion_significance(*, log, accessibility_profiles, factor_binding, rp_map, chromatin_model, labels, normalizer, alternative = 'greater'): #enforced kwargs
     """
-    For a given chromatin accessibility dataset, calculated the change in RP from knocking out each TF
-    reads_per_bin: (num_bins, ), an array describing the reads in each 1kb bin of the genome for a chrom accessibility assay
-    ChIP_per_bin: (num_bins, TFs), a sparse binary map showing bins that contain a chip-seq or motif peak to knock out
-    rp_matrix: (num_bins, genes), precalculated matrix mapping the reads in a bin to a regulatory score for each gene (this is a huge matrix)
-    """
-
-    reads_per_bin = reads_per_bin.reshape((-1,1))
-    #validate shapes
-    num_bins = rp_matrix.shape[0]
-    assert( reads_per_bin.shape == (num_bins, 1)) # bins x 1
-    assert( ChIP_per_bin.shape[0] == num_bins ) # bins x TFs
-
-    # reads_per_bin (*) ChIP_per_bin = reads_per_TF (bins x TFs)
-    # reads_per_TF^T \dot rp_matrix = deleted RP (TF x gene)
-    # deleted RP^T (*) dataset_coeffcient = weighted delta RP (gene x TFs)
-    # weighted delta RP + running_regression_total (just add this to a total and crunch one dataset at a time rather than build huge 3d datacube)
-    delta_rp = ChIP_per_bin.multiply(reads_per_bin).transpose().dot(rp_matrix).transpose().todense()[:, :, np.newaxis]
-
-    return delta_rp
-
-
-def get_delta_regulation(datasets, ChIP_per_bin, rp_matrix, chromatin_model):
-    """
-    Loops through datasets-of-interest, performing ISD for each. Then, compiles the results and gets the effective change with respect to the chromatin model trained in the previous step
-    datasets: (bins, num_datasets): list of chromatin-accessiblity datasets on which to analyze the effects of ISD
-    ChIP_per_bin: (num_bins, TFs), a sparse binary map showing bins that contain a chip-seq or motif peak to knock out
-    rp_matrix: (num_bins, genes), precalculated matrix mapping the reads in a bin to a regulatory score for each gene (this is a huge matrix)
-    chromatin_model: a ChromatinModel object that implements fit and get_deltaRP_activation. Purturbation of this model summarizes effect of ISD
-
-    returns: delta_regulation_score: (genes x TFs)
-    """
-
-    assert( isinstance(chromatin_model, ChromatinModel) )
-
-    #potentially multi-thread this
-    datacube = np.concatenate(
-        [np.array(calculate_dataset_deltaRP(dataset, ChIP_per_bin, rp_matrix)) # genes x TFs
-            for dataset in datasets.T],
-        axis = 2
-    )
-
-    num_genes, num_TFs, num_samples = datacube.shape
-
-    isd_conditions = datacube.reshape((-1, num_samples)) # (genes + TFs) x samples
-
-    delta_regulation_score = chromatin_model.get_deltaRP_activation(isd_conditions).reshape(num_genes, num_TFs) # genes x TFs
-    
-    return delta_regulation_score
-
-def get_delta_regulation_significance(tf_delta_regulation_score, labels, alternative = 'greater'):
-    """
-    Performs wilcoxon test on the results of one TF's change in regulatory score on query vs. background genes
-    tf_delta_regulation_score: (num genes, ): 0D array for one TF's effecst on reguatory score
-    labels: query vs. background labels
-    alternative: alternative hypothesis type. Usually, testing to see if delta regulatory score is greater for query genes
-
-    returns:
-    p-value of wilcoxon test
-    """
-    query_delta_rp = tf_delta_regulation_score[labels.astype(np.bool)]
-    background_delta_rp = tf_delta_regulation_score[ ~labels.astype(np.bool) ]
-
-    return stats.mannwhitneyu(query_delta_rp, background_delta_rp, alternative = alternative)[1]
-
-
-def get_insilico_deletion_significance(*, datasets, ChIP_per_bin, rp_matrix, chromatin_model, labels, alternative = 'greater'): #enforced kwargs
-    """
-    datasets: (bins, num_datasets): list of chromatin-accessiblity datasets on which to analyze the effects of ISD
-    ChIP_per_bin: (num_bins, TFs), a sparse binary map showing bins that contain a chip-seq or motif peak to knock out
-    rp_matrix: (num_bins, genes), precalculated matrix mapping the reads in a bin to a regulatory score for each gene (this is a huge matrix)
+    log: log object for printing
+    accessibility_profiles: (bins, num_datasets): list of chromatin-accessiblity datasets on which to analyze the effects of ISD
+    factor_binding: (num_bins, TFs), a sparse binary map showing bins that contain a chip-seq or motif peak to knock out
+    rp_map: (num_bins, genes), precalculated matrix mapping the reads in a bin to a regulatory score for each gene (this is a huge matrix)
     chromatin_model: a ChromatinModel object that implements fit and get_deltaRP_activation. Purturbation of this model summarizes effect of ISD
     labels: query vs. background labels
     alternative: alternative hypothesis type. Usually, testing to see if delta regulatory score is greater for query genes
@@ -84,12 +23,64 @@ def get_insilico_deletion_significance(*, datasets, ChIP_per_bin, rp_matrix, chr
     p-value of wilcoxon test for each TF
     """
     #get the delta reg score for each TF on each gene, summarized for each dataset
-    delta_regulation_score = get_delta_regulation(datasets, ChIP_per_bin, rp_matrix, chromatin_model) # (genes, TFs)
+    assert( isinstance(chromatin_model, ChromatinModel) )
 
+    loadingbar = LoadingBar('Performing in-silico knockouts', accessibility_profiles.shape[1], 20, cold_start = True)
+
+    log.append(loadingbar, update_line = True)
+    
+    knockouts = []
+    for profile in accessibility_profiles.T:
+        knockouts.append(get_delta_RP(profile, factor_binding, rp_map))
+        log.append(loadingbar, update_line = True)
+     
+    log.append('Calculating Δ regulatory score ...')
+    datacube = np.concatenate(knockouts, axis = 2)
+
+    num_genes, num_TFs, num_samples = datacube.shape
+
+    isd_conditions = datacube.reshape((-1, num_samples)) # (genes + TFs) x samples
+
+    isd_conditions = normalizer(isd_conditions)
+
+    delta_regulation_score = chromatin_model.get_deltaRP_activation(isd_conditions).reshape(num_genes, num_TFs)
+    
+    log.append('Caculating p-values ...')
     #apply the wilcoxon test on each TF
-    tf_p_vals = np.apply_along_axis(
-        lambda tf_profile : get_delta_regulation_significance(tf_profile, labels, alternative), 
-        0, delta_regulation_score) # output shape: (TFs, )
+    query_delta = delta_regulation_score[labels.astype(np.bool)]
+    background_delta = delta_regulation_score[~labels.astype(np.bool)]
+    
+    p_vals = []
+    for q, b in zip(query_delta.T, background_delta.T):
+        try:
+            p_vals.append(
+                stats.mannwhitneyu(q, b, alternative = alternative)
+            )
+        except ValueError:
+            p_vals.append(None)
 
-    return tf_p_vals
+    test_statistic, p_values = list(zip(*p_vals))
+
+    return test_statistic, p_values
+
+
+def cauchy_combination(p_vals, wi=None):
+    #https://arxiv.org/abs/1808.09011
+    p_vals = np.array(p_vals, np.float64)
+
+    assert(len(p_vals.shape) == 2 ), 'P-values must be provided as matrix of (samples, multiple p-values)'
+    assert(p_vals.shape[1] > 1), 'Must have multiple p-values to combine'
+
+    if np.any(p_vals <= 1e-15): # np.finfo(np.float64) 1e-15
+        raise NotImplementedError('P-values underflowing float64 datatype, install mpmath to get accurate results.')
+    else:
+        if wi is None:
+            wi = np.ones((1, p_vals.shape[1])) / p_vals.shape[1]
+        else:
+            assert(p_vals.shape[1] == weights.shape[1])
+
+        test_statistic = np.sum(wi * np.tan((0.5-p_vals) * np.pi), axis = 1)
+        combined_p_value = 0.5 - np.arctan(test_statistic)/np.pi
+
+        return test_statistic, combined_p_value
 
