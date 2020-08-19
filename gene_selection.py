@@ -2,7 +2,7 @@
 import numpy as np
 import os
 import random
-from collections import Counter, defaultdict
+from collections import Counter, defaultdict, OrderedDict
 
 #enforce sampling according to the TAD distribution of the genome.
 def sampling_by_tad(background_gene_list, gene_names, TAD_data, num_selected=3000):
@@ -63,9 +63,9 @@ def match_user_provided_genes(user_genelist, gene_symbols, gene_refseqIDs):
     """
     user_genelist = [user_symbol.upper() for user_symbol in user_genelist]
 
-    gene_symbols, gene_refseqIDs = np.array([symbol.upper() for symbol in gene_symbols]), np.array([ref_id.upper() for ref_id in gene_refseqIDs])
+    uppered_symbols, gene_refseqIDs = np.array([symbol.upper() for symbol in gene_symbols]), np.array([ref_id.upper() for ref_id in gene_refseqIDs])
 
-    supplied_symbols = np.isin(gene_symbols, user_genelist)
+    supplied_symbols = np.isin(uppered_symbols, user_genelist)
     supplied_ids = np.isin(gene_refseqIDs, user_genelist)
 
     user_supplied_genes = np.logical_or(supplied_symbols, supplied_ids)
@@ -74,8 +74,9 @@ def match_user_provided_genes(user_genelist, gene_symbols, gene_refseqIDs):
 
 #creates a label vector, indexed by gene symbol, with binary labels: {0 = background, 1 = query}
 def create_label_dictionary(query_list, background_list):
-    return { gene_symbol : i < len(query_list) for i, gene_symbol in enumerate(list(query_list) + list(background_list)) }
-
+    return OrderedDict(
+        [(gene, i < len(query_list)) for i, gene in enumerate(list(query_list) + list(background_list))]
+    )
 
 #converts user-entered data to two gene lists: a query list, and a background list
 def select_genes(query_list, gene_symbols, gene_ids, tad_domains, num_background_genes = 3000, 

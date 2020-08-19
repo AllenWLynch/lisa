@@ -9,6 +9,7 @@ class LoadingBar:
         self.length = length
         self.label = label
         self.progress = 0
+        self.cold_start = cold_start
         
     def __str__(self):
         if self.cold_start:

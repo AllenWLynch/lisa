@@ -51,7 +51,7 @@ class LR_BinarySearch_SampleSelectionModel(SampleSelectionModel):
         C = 2**-penalty, and C is inverse of regularization. Therefor for range [-1, 10], the minimum C = 2**1 = 2, very slightly regularized,
         and C = 2**-10, or very highly regularized. Binary search finds the optimal parameter in this space
     """
-    def __init__(self, max_iters = 50, num_datasets_selected = 10, 
+    def __init__(self, num_datasets_selected, max_iters = 50, 
         epsilon = 1e-7, penalty = 'l1', tol = 0.01, penalty_range = (-1, 10)):
         self.max_iters = max_iters
         self.num_datasets_selected = num_datasets_selected
@@ -107,19 +107,13 @@ class ChromatinModel(EstimatorInterface):
         raise NotImplementedError()
 
 
-class DeltaRegLogisticRegression(LogisticRegression, ChromatinModel):
+class DeltaRegLogisticRegression(LogisticRegression):
     """
     Extends sklearn LR model with the get_deltaRP_activation function
     """
     def get_deltaRP_activation(self, X):
-        """
-        The regulatory score of a gene is R(X), where X is the regulatory potential of that gene in each of n selected datasets
-        The delta regulatory score is the change in R(X) after insilico deletion of a TF, and the effects of ISD are Z.
-        So deltaR = R(X - Z) - R(X).
-        For logistic regression R(X) = c * X + b,
-        so deltaR = c (X - Z) + b - (c * X + b) = cX - cZ + b - cX - b = - cZ
-        """
-        return np.dot(X, self.coef_.reshape((-1, 1))) # X : (genes x datasets) * C (datasets  x 1) = (genes x 1)
+        #transpose to genes, TFs, samples
+        return X.transpose(0,2,1).dot(self.coef_.reshape(-1))
 
 
 class LR_ChromatinModel(ChromatinModel):
@@ -132,18 +126,22 @@ class LR_ChromatinModel(ChromatinModel):
         self.scoring = scoring
         self.penalty = penalty
 
-    def fit(self, X, y, n_jobs = 1):
+    def fit(self, X0, y, n_jobs = 1):
         #define a classifier for query vs background genes
         classifier = DeltaRegLogisticRegression(penalty = self.penalty, solver = 'lbfgs' if self.penalty == 'l2' else 'liblinear')
         #optimize model with grid search
         self.grid_search = GridSearchCV(classifier, param_grid = self.param_grid, scoring = self.scoring, cv = self.kfold_cv, n_jobs = 1)\
-            .fit(X, y)
+            .fit(X0, y)
         self.model = self.grid_search.best_estimator_
-        
+        self.X0 = X0
         return self
 
     def get_deltaRP_activation(self, X):
-        return self.model.get_deltaRP_activation(X)
+        """
+        X is a datacube of shape (genes, samples, TFs),
+        this method must implement a transformation into a genes x TFs matrix, sumarrizing the dataset-axis effects
+        """
+        return self.model.get_deltaRP_activation(X - self.X0[:,:,np.newaxis])
 
     def get_info(self):
         return dict(

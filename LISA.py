@@ -92,11 +92,15 @@ ________________________________________________________________________________
 
     def _load_factor_binding_data(self, data_object):
 
-        dataset_ids = list(data_object[self.isd_method].keys())
+        if self.isd_method == 'ChIP-seq_1000kb':
+            dataset_ids = list(data_object[_config.get('accessibility_assay','reg_potential_dataset_ids')\
+                .format(technology = 'ChIP-seq_RP')][...].astype(str))
+        else:
+            dataset_ids = list(data_object[self.isd_method].keys())
 
         loadingbar = LoadingBar('Reading {} data'.format(self.isd_method), len(dataset_ids), 20)
 
-        peaks, dataset_index = [],[]
+        peaks, dataset_index,factor_names = [],[],[]
 
         for i, dataset_id in enumerate(dataset_ids):
             self.log.append(loadingbar, update_line = True)
@@ -104,6 +108,7 @@ ________________________________________________________________________________
             dataset = data_object[_config.get('factor_binding', 'tf_binding_data').format(technology = self.isd_method, dataset_id = dataset_id)]
             peaks.append(dataset[...].astype(np.int64))
             dataset_index.append(np.full(dataset.shape, i))
+            factor_names.append(dataset.attrs['factor'])
 
         self.log.append('Formatting {} data ...'.format(self.isd_method))
         peaks = np.concatenate(peaks)
@@ -114,32 +119,19 @@ ________________________________________________________________________________
                 np.ones(len(peaks)),
                 (peaks, dataset_index)
             ),
-            shape = (int(_config.get('lisa_params','num_bins')), dataset_index[-1] + 1)
+            shape = (int(_config.get('lisa_params','num_bins')), len(dataset_ids))
         )
 
-        factor_names = [dataset_id.split('_')[0] for dataset_id in dataset_ids]
-
-        return factor_binding, factor_names
+        return factor_binding, factor_names, dataset_ids
 
     def _load_rp_map(self, data_object):
 
         self.log.append('Importing regulatory potential map ...')
 
-        rp_shape = (3209513, 1090)
-        num_datapoints = 1e7
+        rp_map_symbols = data_object[_config.get('RP_map', 'gene_symbols')][...].astype(str)
+        rp_map = sparse.load_npz(_config.get('RP_map','matrix').format(species = self.species)).tocsc()
 
-        random_gene = np.random.choice(rp_shape[1], int(num_datapoints))
-        random_bin = np.random.choice(rp_shape[0], int(num_datapoints))
-
-        rp_map = sparse.csc_matrix(
-            (
-                np.ones(int(num_datapoints)),
-                (random_bin, random_gene)
-            ),
-            shape = rp_shape
-        )
-
-        return rp_map.transpose()
+        return rp_map, rp_map_symbols
 
     def _load_data(self):
 
@@ -154,9 +146,9 @@ ________________________________________________________________________________
                     self.gene_symbols, self.gene_ids, self.tad_domains = self._load_gene_info(data)
 
                     with log.section('Loading binding data:') as log:
-                        self.factor_binding, self.factor_ids = self._load_factor_binding_data(data)
+                        self.factor_binding, self.factor_names, self.factor_dataset_ids = self._load_factor_binding_data(data)
 
-                    self.rp_map = self._load_rp_map(data)
+                    self.rp_map, self.rp_map_symbols = self._load_rp_map(data)
 
                     self.log.append('Done!')
             self._is_loaded = True
@@ -170,39 +162,43 @@ ________________________________________________________________________________
             log.append('Fetching data from cistrome.org ...')
             log.append('Decompressing data ...')
             log.append('Done!\n')
+            raise NotImplementedError()
 
-    def _train_chromatin_model(self, data_object, technology, label_dict):
+
+    def load_rp_matrix(self, data_object, technology, label_dict):
 
         symbol_index = data_object[_config.get('accessibility_assay', 'reg_potential_gene_symbols').format(technology=technology)][...].astype(str)
         dataset_ids = data_object[_config.get('accessibility_assay', 'reg_potential_dataset_ids').format(technology = technology)][...].astype(str)
-
         symbol_mask = np.isin(symbol_index, list(label_dict.keys()))
 
         rp_matrix = data_object[_config.get('accessibility_assay', 'reg_potential_matrix').format(technology=technology)][symbol_mask, :][...]
 
-        sample_selection_model = LR_BinarySearch_SampleSelectionModel()
-        chromatin_model = LR_ChromatinModel({'C' : list(10.0**np.arange(-4,4,1))})
+        rp_matrix = rp_matrix[self.get_indices_in_order(symbol_index[symbol_mask], label_dict.keys()), :]
 
-        labels = np.array([label_dict[gene_symbol] for gene_symbol in symbol_index[symbol_mask]])
+        return rp_matrix, dataset_ids
+
+    def _train_chromatin_model(self, data_object, technology, label_dict):
+
+        rp_matrix, dataset_ids = self.load_rp_matrix(data_object, technology, label_dict)
+
+        sample_selection_model = LR_BinarySearch_SampleSelectionModel(self.num_datasets_selected)
+        chromatin_model = LR_ChromatinModel({'C' : list(10.0**np.arange(-4,4,0.5))})
 
         narrow_rp_matrix, selected_dataset_ids, selection_model, chromatin_model, normalization_fn = build_chromatin_model\
             .build_chromatin_model(
-                rp_matrix, dataset_ids, labels, sample_selection_model, chromatin_model,
+                rp_matrix, dataset_ids, label_dict.values(), sample_selection_model, chromatin_model,
                 num_anova_features = self.num_datasets_selected_anova, use_covariates = self.use_covariates, n_jobs = self.threads
             )
 
         return dict(
-            rp_matrix = narrow_rp_matrix,
-            labels = labels, 
             selected_datasets = selected_dataset_ids,
             selection_model = selection_model,
             chromatin_model = chromatin_model,
             norm_fn = normalization_fn
         )
 
-        
-    def _do_ISDs(self, data_object, selected_datasets, accessibility_assay, chromatin_model_dict):
 
+    def _load_accessibility_profiles(self, data_object, selected_datasets, accessibility_assay):
         #dataset_ids = list(zip(*[key.split(',') for key in data_object[factor_binding_technology].keys()]))
         loadingbar = LoadingBar('Reading {} data'.format(accessibility_assay), len(selected_datasets), 20)
 
@@ -213,13 +209,15 @@ ________________________________________________________________________________
                 data_object[_config.get('accessibility_assay','binned_reads')\
                 .format(technology = accessibility_assay, dataset_id = selected_dataset)][...][:,np.newaxis]
             )
-
         accessibility_profiles = np.concatenate(accessibility_profiles, axis = 1)
-        
 
-        return ISD.get_insilico_deletion_significance(log = self.log, accessibility_profiles = accessibility_profiles, factor_binding=self.factor_binding, 
-                        rp_map = self.rp_map, chromatin_model = chromatin_model_dict['chromatin_model'], labels = chromatin_model_dict['labels'],
-                        normalizer = chromatin_model_dict['norm_fn'])
+        return accessibility_profiles
+
+    @staticmethod
+    def get_indices_in_order(from_list, target_ordering):
+        from_map = {gene : i for i, gene in enumerate(from_list)}
+        reordered = np.array([from_map[symbol] for symbol in target_ordering])
+        return reordered
 
     def predict(self, query_list, background_list = []):
 
@@ -256,7 +254,10 @@ ________________________________________________________________________________
                     self.log.append('Selected {} query genes and {} background genes.'\
                         .format(str(num_query_genes), str(len(label_dict) - num_query_genes)))
 
-                
+                    rp_map_symbols_idx = self.get_indices_in_order(self.rp_map_symbols, label_dict.keys())
+
+                    subset_rp_map = self.rp_map[:, rp_map_symbols_idx].transpose()
+               
                 with self.log.section('Modeling DNase purturbations:'):
                     #DNase model building and purturbation
                     self.log.append('Selecting discriminative datasets and training chromatin model ...')
@@ -264,7 +265,11 @@ ________________________________________________________________________________
                     dnase_model = self._train_chromatin_model(data, 'DNase', label_dict)
                     
                     with self.log.section('Calculating in-silico deletions:'):
-                        dnase_test_stats, dnase_pvals = self._do_ISDs(data, dnase_model['selected_datasets'], 'DNase', dnase_model)
+
+                        dnase_accessibility_profiles = self._load_accessibility_profiles(data, dnase_model['selected_datasets'], 'DNase')
+
+                        dnase_test_stats, dnase_pvals = ISD.get_insilico_deletion_significance(log = self.log, accessibility_profiles = dnase_accessibility_profiles, 
+                            factor_binding=self.factor_binding, rp_map = subset_rp_map, chromatin_model = dnase_model['chromatin_model'], labels = label_dict.values(), normalizer = dnase_model['norm_fn'])
                     
                     self.log.append('Done!')
 
@@ -274,35 +279,50 @@ ________________________________________________________________________________
                     acetylation_model = self._train_chromatin_model(data, 'H3K27ac', label_dict)
                     
                     with self.log.section('Calculating in-silico deletions:'):
-                        acetylation_test_stats, acetylation_pvals = self._do_ISDs(data, acetylation_model['selected_datasets'], 'H3K27ac', acetylation_model)
-                    
-                    self.log.append('Done!')
-                
-                with self.log.section('Modeling direct {} purturbations:'.format(self.isd_method)):
 
-                    binding_test_stats, binding_pvals = list(np.random.rand(len(acetylation_pvals))), list(np.random.rand(len(acetylation_pvals)))
-
+                        acetylation_accessibility_profiles = self._load_accessibility_profiles(data, acetylation_model['selected_datasets'], 'H3K27ac')
+                        
+                        acetylation_test_stats, acetylation_pvals = ISD.get_insilico_deletion_significance(log = self.log, accessibility_profiles = acetylation_accessibility_profiles, 
+                            factor_binding=self.factor_binding, rp_map = subset_rp_map, chromatin_model = acetylation_model['chromatin_model'], labels = label_dict.values(), normalizer = acetylation_model['norm_fn'])
+                        
                     self.log.append('Done!')
 
+                if self.isd_method == 'ChIP-seq_1000kb':
+
+                    with self.log.section('Modeling direct ChIP-seq purturbations ...'):
+
+                        chip_rp_matrix, dataset_ids = self.load_rp_matrix(data, 'ChIP-seq_RP', label_dict)
+
+                        chip_test_stats, chip_pvals = ISD.get_delta_RP_p_value(chip_rp_matrix, label_dict.values())
+
+                    aggregate_pvals = np.array([dnase_pvals, acetylation_pvals, chip_pvals]).T
+
+                else:
+                    aggregate_pvals = np.array([dnase_pvals, acetylation_pvals]).T
 
                 with self.log.section('Mixing effects using Cauchy combination ...'):
                     
-                    combined_test_stats, combined_p_values = ISD.cauchy_combination(np.array([dnase_pvals, acetylation_pvals, binding_pvals]).T)
+                    combined_test_stats, combined_p_values = ISD.cauchy_combination(aggregate_pvals)
 
                 self.log.append('Formatting output ...')
 
                 results = dict(
-                    factor_id = self.factor_ids,
+                    factor = self.factor_names,
+                    dataset_id = self.factor_dataset_ids,
                     combined_p_value = combined_p_values,
                     combined_test_statistic = combined_test_stats,
                     Dnase_p_value = dnase_pvals,
                     Dnase_test_statistic = dnase_test_stats,
-                    h3k27ac_p_value = acetylation_pvals,
-                    h3k27ac_test_statistic = acetylation_test_stats,
+                    H3K27ac_p_value = acetylation_pvals,
+                    H3K27ac_test_statistic = acetylation_test_stats,
                 )
 
+                if self.isd_method == 'ChIP-seq_1000kb':
+                    results['Chip-seq_p_value'] = chip_pvals
+                    results['Chip-seq_test_statistic'] = chip_test_stats
+
                 results_table = list(zip(*results.values()))
-                results_table = sorted(results_table, key = lambda col : col[1])
+                results_table = sorted(results_table, key = lambda col : col[2])
 
                 results = dict( zip(results.keys(), list(zip(*results_table ))) )
                 
@@ -310,6 +330,8 @@ ________________________________________________________________________________
 
                 #return model_metadata as big dictionary
                 return results, dict(
+                    query_genes = [symbol for symbol, is_query in label_dict.items() if is_query],
+                    background_genes = [symbol for symbol, is_query in label_dict.items() if not is_query],
                     Dnase_models= dict(
                         selection_model = dnase_model['selection_model'].get_info(),
                         chromatin_model = dnase_model['chromatin_model'].get_info(),

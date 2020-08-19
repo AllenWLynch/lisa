@@ -18,38 +18,45 @@ def build_chromatin_model(reg_potential_data, dataset_metadata, labels, sample_s
     #assert( isinstance(dataset_metadata, (list, np.array)))
     assert( reg_potential_data.shape == (len(labels), len(dataset_metadata)) )
 
+    labels = np.array(list(labels))
+
     #NORMALIZE THE DATA
     #take log2 of RP
-    reg_potential_data = np.log2(reg_potential_data + 1)
     normalizer = StandardScaler(with_std = False)
-    
-    reg_potential_data = normalizer.fit_transform(reg_potential_data)
+
+    X = normalizer.fit_transform(np.log2(reg_potential_data + 1))
     
     dataset_metadata = np.array(dataset_metadata)
+    normalization_means = normalizer.mean_
 
     #select features with anova
-    anova_featues = SelectKBest(f_classif, k=num_anova_features).fit(reg_potential_data, labels).get_support()
+    anova_featues = SelectKBest(f_classif, k=num_anova_features).fit(X, labels).get_support()
 
     #leave out worst features
+    X = X[:, anova_featues]
     reg_potential_data = reg_potential_data[:, anova_featues]
     dataset_metadata = dataset_metadata[anova_featues]
-    normalization_means = normalizer.mean_[anova_featues]
+    normalization_means = normalization_means[anova_featues]
 
     #select best features using LR, record some info about model
-    sample_selection_model = sample_selection_model.fit(reg_potential_data, labels)
+    sample_selection_model = sample_selection_model.fit(X, labels)
     selected_features = sample_selection_model.get_selected_datasets()
 
     #subset for best features
-    reg_potential_data = reg_potential_data[:, selected_features] 
+    X = X[:, selected_features]
+    reg_potential_data = reg_potential_data[:, selected_features]
     dataset_metadata = dataset_metadata[selected_features]
     normalization_means = normalization_means[selected_features]
 
     #add covariates back to data
     if use_covariates and False:
-        reg_potential_data = np.concatenate([reg_potential_data, covariates], axis = 1)
+        X = np.concatenate([X, covariates], axis = 1)
 
     #train chromatin landscape model
-    chromatin_model.fit(reg_potential_data, labels, n_jobs)
+    chromatin_model.fit(X, labels, n_jobs)
 
     #return final trained model, the selected features' metadata (id), the sample selection model, chromatin model, and a normalization function
-    return reg_potential_data, dataset_metadata, sample_selection_model, chromatin_model, lambda x : np.log2(x + 1) - normalization_means.reshape((1,-1))
+    '''
+    the normalization function takes the gene x sample x TF datacube produced by ISD, and subtracts the deltaRP from knockouts from the original RP matrix, then normalizes by log and mean scaling
+    '''
+    return reg_potential_data, dataset_metadata, sample_selection_model, chromatin_model, lambda x : np.log2(reg_potential_data[:,:,np.newaxis] - x + 1) - normalization_means[np.newaxis, :, np.newaxis]
