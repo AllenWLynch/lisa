@@ -15,6 +15,8 @@ Users may extend the SampleSelectionModel or ChromatinModel class to define new 
 from sklearn.base import BaseEstimator
 from sklearn.model_selection import GridSearchCV
 from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler 
+from sklearn.feature_selection import SelectKBest, f_classif
 import numpy as np
 from sklearn.exceptions import ConvergenceWarning
 import warnings
@@ -51,7 +53,7 @@ class LR_BinarySearch_SampleSelectionModel(SampleSelectionModel):
         C = 2**-penalty, and C is inverse of regularization. Therefor for range [-1, 10], the minimum C = 2**1 = 2, very slightly regularized,
         and C = 2**-10, or very highly regularized. Binary search finds the optimal parameter in this space
     """
-    def __init__(self, num_datasets_selected, max_iters = 50, 
+    def __init__(self, num_anova_features, num_datasets_selected, max_iters = 50, 
         epsilon = 1e-7, penalty = 'l1', tol = 0.01, penalty_range = (-1, 10)):
         self.max_iters = max_iters
         self.num_datasets_selected = num_datasets_selected
@@ -59,6 +61,7 @@ class LR_BinarySearch_SampleSelectionModel(SampleSelectionModel):
         self.penalty = penalty
         self.tol = tol
         self.penalty_range = penalty_range
+        self.num_anova_features = num_anova_features
 
     #binary search to close in on optimal penalty value
     def _binary_search(self, X, y, low, high, iter_num = 0):
@@ -86,9 +89,30 @@ class LR_BinarySearch_SampleSelectionModel(SampleSelectionModel):
         return self.get_selected_datasets().sum()
 
     #instantiates a new LR model, then tunes the C parameter to get n datasets
-    def fit(self, X, y):
+    def fit(self, rp_matrix, labels):
+
+        # Normalize with mean centering and log transformation
+        index_array = np.arange(rp_matrix.shape[1])
+
+        X = StandardScaler(with_std = False).fit_transform( np.log2(rp_matrix + 1) )
+
+        #narrow features with anova selection
+        anova_featues = SelectKBest(f_classif, k=self.num_anova_features).fit(X, labels).get_support()
+        #get indices mapping anova features to original features
+        index_array = index_array[anova_featues]
+        #subset selected features
+        X = X[:, anova_featues]
+
+        #instantiate LR search model
         self.model = LogisticRegression(penalty = self.penalty, tol = self.tol, solver = 'liblinear')
-        return self._binary_search(X, y, *self.penalty_range)
+        #use binary search technique to find datasets
+        self._binary_search(X, labels, *self.penalty_range)
+        #get boolean mask for selected datasets
+        lr_selections = self.get_selected_datasets()
+        #map LR selections back to original features as boolean mask
+        dataset_selections = index_array[lr_selections]
+
+        return dataset_selections
 
     #gets information on parameters chosen by user, and parameters of LR model to save to json logs
     def get_info(self):
@@ -107,15 +131,6 @@ class ChromatinModel(EstimatorInterface):
         raise NotImplementedError()
 
 
-class DeltaRegLogisticRegression(LogisticRegression):
-    """
-    Extends sklearn LR model with the get_deltaRP_activation function
-    """
-    def get_deltaRP_activation(self, X):
-        #transpose to genes, TFs, samples
-        return X.transpose(0,2,1).dot(self.coef_.reshape(-1))
-
-
 class LR_ChromatinModel(ChromatinModel):
     """
     Wrapper for the DeltaLR model defined above. Fits the best LR classifier using grid search
@@ -126,22 +141,35 @@ class LR_ChromatinModel(ChromatinModel):
         self.scoring = scoring
         self.penalty = penalty
 
-    def fit(self, X0, y, n_jobs = 1):
+    def fit(self, rp_matrix, labels, n_jobs = 1):
+
+        self.rp_0 = rp_matrix
+
+        self.normalizer = StandardScaler(with_std = False)
+
+        self.X0 = self.normalizer.fit_transform( np.log2(self.rp_0 + 1)  )
+
         #define a classifier for query vs background genes
-        classifier = DeltaRegLogisticRegression(penalty = self.penalty, solver = 'lbfgs' if self.penalty == 'l2' else 'liblinear')
+        classifier = LogisticRegression(penalty = self.penalty, solver = 'lbfgs' if self.penalty == 'l2' else 'liblinear')
         #optimize model with grid search
         self.grid_search = GridSearchCV(classifier, param_grid = self.param_grid, scoring = self.scoring, cv = self.kfold_cv, n_jobs = 1)\
-            .fit(X0, y)
+            .fit(self.X0, labels)
+
         self.model = self.grid_search.best_estimator_
-        self.X0 = X0
+
         return self
 
-    def get_deltaRP_activation(self, X):
+    def get_deltaRP_activation(self, rp_knockout):
         """
-        X is a datacube of shape (genes, samples, TFs),
+        rp_knockout: is a datacube of shape (genes, samples, TFs),
         this method must implement a transformation into a genes x TFs matrix, sumarrizing the dataset-axis effects
         """
-        return self.model.get_deltaRP_activation(X - self.X0[:,:,np.newaxis])
+        #subtract define deltaX to be the log2 of the fraction of knocked-out RP
+        deltaX = np.log2(self.rp_0[:,:,np.newaxis] - rp_knockout + 1) - np.log2(self.rp_0[:,:,np.newaxis] + 1)
+        
+        #flip sign so that more knockout = more deltaR
+        return -1 * deltaX.transpose(0,2,1).dot(self.model.coef_.reshape(-1))
+
 
     def get_info(self):
         return dict(

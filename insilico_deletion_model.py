@@ -3,6 +3,16 @@ import numpy as np
 from scipy import sparse, stats
 from models import ChromatinModel
 from utils import LoadingBar
+from multiprocessing import Pool
+
+def mannu_test_function(x):
+    query, background = x
+    try:
+        return stats.mannwhitneyu(query, background, alternative = 'greater')
+    #if all values in query and background are equal (no knockouts), throws value error
+    except ValueError:
+        #catch, return none for test statistic, 1.0 for p-val
+        return (None, 1.0)
 
 def get_delta_RP(profile, binding_data, rp_map):
     '''
@@ -16,8 +26,12 @@ def get_delta_RP(profile, binding_data, rp_map):
     '''
     return np.array(rp_map.dot(binding_data.astype(np.bool).multiply(profile.reshape((-1,1)))).todense())[:,np.newaxis,:]
 
+#distributes arguments for get_delta_RP function, to be used by multiprocessing module
+def delta_RP_wrapper(x):
+    return get_delta_RP(*x)
 
-def get_delta_RP_p_value(delta_regulation_score, labels):
+#Gotta fix this up
+def get_delta_RP_p_value(delta_regulation_score, labels, cores = 1):
     '''
     delta_regulation_score: gene x TF, model output of delta-RP matrix. more purturbation of genes of interest correspond with higher delta regulation score
     labels: query vs. background labels for each gene in delta-RP matrix
@@ -30,23 +44,35 @@ def get_delta_RP_p_value(delta_regulation_score, labels):
     background_delta = delta_regulation_score[~labels.astype(np.bool)]
 
     #for each TF, calculate p-value of difference in delta-R distributions between query and background genes
-    p_vals = []
-    for i, (q, b) in enumerate(zip(query_delta.T, background_delta.T)):
-        try:
-            p_vals.append(
-                stats.mannwhitneyu(q, b, alternative = 'greater')
-            )
-        except ValueError as err:
-            # Occurs when the values of query and background genes are the same. This means that a chip-seq sample did not affect any genes.
-            #print('Null on dataset: {}'.format(str(i)))
-            p_vals.append((None, 1.0))
+    test_parameters = list(zip(query_delta.T, background_delta.T))
+
+    if cores == 1:
+        p_vals = [
+            mannu_test_function((q,b)) for q,b in test_parameters
+        ]
+
+    else:
+        with Pool(cores) as p:
+            p_vals = p.map(mannu_test_function, test_parameters)
 
     test_statistic, p_values = list(zip(*p_vals))
 
     return test_statistic, p_values
 
 
-def get_insilico_deletion_significance(*, log, accessibility_profiles, factor_binding, rp_map, chromatin_model, labels, normalizer, full_return = False): #enforced kwargs
+class KnockoutGenerator:
+
+    def __init__(self, profiles, factor_binding, rp_map):
+        self.factor_binding = factor_binding
+        self.rp_map = rp_map
+        self.profiles = profiles
+
+    def __iter__(self):
+
+        for profile in self.profiles.T:
+            yield profile, self.factor_binding, self.rp_map
+
+def get_insilico_deletion_significance(*, log, accessibility_profiles, factor_binding, rp_map, chromatin_model, labels, cores): #enforced kwargs
     """
     log: log object for printing
     accessibility_profiles: (bins, num_datasets): list of chromatin-accessiblity datasets on which to analyze the effects of ISD
@@ -60,15 +86,16 @@ def get_insilico_deletion_significance(*, log, accessibility_profiles, factor_bi
     """
     assert( isinstance(chromatin_model, ChromatinModel) )
 
-    loadingbar = LoadingBar('Performing in-silico knockouts', accessibility_profiles.shape[1], 20, cold_start = True)
-
-    log.append(loadingbar, update_line = True)
-    
+    log.append('Performing in-silico knockouts ...')
     #loop through datasets and find delta-RP from all knockouts
-    knockouts = []
+    '''knockouts = []
+    loadingbar = LoadingBar('Performing in-silico knockouts', accessibility_profiles.shape[1], 20, cold_start = True)
+    log.append(loadingbar, update_line = True)
     for profile in accessibility_profiles.T:
         knockouts.append(get_delta_RP(profile, factor_binding, rp_map))
-        log.append(loadingbar, update_line = True)
+        log.append(loadingbar, update_line = True)'''
+    with Pool(cores) as p:
+        knockouts = p.map(delta_RP_wrapper, iter(KnockoutGenerator(accessibility_profiles, factor_binding, rp_map)))
      
     #concatenate datasets to for gene x TF x datasets shaped matrix
     log.append('Calculating Δ regulatory score ...')
@@ -76,24 +103,15 @@ def get_insilico_deletion_significance(*, log, accessibility_profiles, factor_bi
 
     num_genes, num_samples, num_TFs = datacube.shape
 
-    datacube = normalizer(datacube)
-
-    #isd_conditions = datacube.transpose(0,2,1).reshape((-1, num_samples))
-
-    #use chromatin model to summarize change in delta-RP across all datasets
     delta_regulation_score = chromatin_model.get_deltaRP_activation(datacube)
     
     assert(delta_regulation_score.shape == (num_genes, num_TFs))
     
     log.append('Caculating p-values ...')
     #apply the wilcoxon test on each TF
-    statistic, p_vals = get_delta_RP_p_value(delta_regulation_score, labels)
+    statistic, p_vals = get_delta_RP_p_value(delta_regulation_score, labels, cores=cores)
 
-    if full_return:
-        return statistic, p_vals, isd_conditions, delta_regulation_score
-    
-    return statistic, p_vals
-    
+    return statistic, p_vals, datacube
 
 def cauchy_combination(p_vals, wi=None):
     #https://arxiv.org/abs/1808.09011

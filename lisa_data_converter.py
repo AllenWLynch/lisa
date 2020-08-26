@@ -28,6 +28,8 @@ def subset_accessibility_rp_data(path_to_h5, gene_set, qc_status):
         
     return rp_data, np.array(symbols)[gene_subset], dataset_ids[qc_subset]
 
+
+
 def reformat_accessibility_assay_RP(h5_object, technology, config, path_to_h5, gene_set, qc_status):
 
     rp_data, genes, sid = subset_accessibility_rp_data(path_to_h5, gene_set, qc_status)
@@ -48,7 +50,7 @@ def reformat_accessibility_assay_RP(h5_object, technology, config, path_to_h5, g
     )
 
     
-def reformat_TF_hits(h5_object, config, technology, path_to_h5, window_converter, metadata):
+def reformat_TF_hits(h5_object, config, technology, path_to_h5, window_converter, metadata, offset = 0):
     
     with h5.File(path_to_h5, 'r') as tf_hits:
 
@@ -69,14 +71,13 @@ def reformat_TF_hits(h5_object, config, technology, path_to_h5, window_converter
                         factor_name = sample_metadata.factor.replace('/', '-').replace('_','-')
 
                         peaks = tf_hits[sample][...]
-                        peaks = window_converter[peaks]
+                        peaks = window_converter[peaks - offset]
                         
                         new_dataset = h5_object.create_dataset(
                             config['factor_binding']['tf_binding_data']\
                                 .format(technology = technology, dataset_id = sample),
                             data = np.array(list(peaks)).astype(np.int64)
                         )
-                        
                         
                         new_dataset.attrs.create('factor', factor_name)
                         
