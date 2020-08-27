@@ -73,10 +73,15 @@ def match_user_provided_genes(user_genelist, gene_set):
 
 #creates a label vector, indexed by gene symbol, with binary labels: {0 = background, 1 = query}
 def create_label_dictionary(query_list, background_list):
-    return {
+    return { #this dict is used to create label vector for LISA algo
         gene.get_location() : int(i < len(query_list))
         for i, gene in enumerate(list(query_list) + list(background_list))
-    }, query_list.get_symbols(), background_list.get_symbols()
+    }, dict( #return this dict for results (purely informational)
+        query_symbols = query_list.get_symbols(),
+        background_symbols = background_list.get_symbols(),
+        query_locations = query_list.get_locations(),
+        background_locations = background_list.get_locations(),
+    )
     
 #converts user-entered data to two gene lists: a query list, and a background list
 def select_genes(query_list, gene_set, num_background_genes = 3000, 

@@ -68,7 +68,6 @@ class LR_BinarySearch_SampleSelectionModel(SampleSelectionModel):
         penalty = (high - low) / 2 + low
         self.model.C = 2**-penalty
         self.model.fit(X,y)
-        coefs = self.model.coef_
         #get upweighted datasets
         num_datasets_selected = self.get_num_selected_datasets()
 
@@ -147,13 +146,13 @@ class LR_ChromatinModel(ChromatinModel):
 
         self.normalizer = StandardScaler(with_std = False)
 
-        self.X0 = self.normalizer.fit_transform( np.log2(self.rp_0 + 1)  )
+        X0 = self.normalizer.fit_transform( np.log2(self.rp_0 + 1)  )
 
         #define a classifier for query vs background genes
         classifier = LogisticRegression(penalty = self.penalty, solver = 'lbfgs' if self.penalty == 'l2' else 'liblinear')
         #optimize model with grid search
         self.grid_search = GridSearchCV(classifier, param_grid = self.param_grid, scoring = self.scoring, cv = self.kfold_cv, n_jobs = 1)\
-            .fit(self.X0, labels)
+            .fit(X0, labels)
 
         self.model = self.grid_search.best_estimator_
 

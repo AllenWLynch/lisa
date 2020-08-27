@@ -146,6 +146,9 @@ class GeneSet:
     def get_symbols(self):
         return [gene.get_name() for gene in self]
 
+    def get_locations(self):
+        return [gene.get_location() for gene in self]
+
     def get_distinct_genes_by_symbol(self, excluding = set()):
 
         names = self.get_symbols()
