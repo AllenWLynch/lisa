@@ -1,4 +1,0 @@
-Add dataset normalization - x
-Covariates in model building
-Make Lisa to Lisa_v2 data builder, intersect TAD gene symbols and available RP gene symbols
-Test ISD model
