@@ -32,26 +32,29 @@ def mannu_test_function(x):
         return (None, 1.0)
 
 
-class LISA_Assay:
+class LISA_RP_Assay:
 
     def __init__(self, technology, config, cores, log):
         self.config = config
         self.technology = technology
         self.cores = cores
         self.log = log
+        self.loaded = False
+        self.subsetted = False
 
-    def load_rp_matrix(self, data_object, gene_mask = None):
+    def load_rp_matrix(self, data_object, gene_mask = None, oneshot = False):
 
         self.log.append('Loading {} RP matrix ...'.format(self.technology))
         
         dataset_ids = data_object[self.config.get('accessibility_assay', 'reg_potential_dataset_ids').format(technology = self.technology)][...].astype(str)
 
-        if not gene_mask is None:
+        if oneshot and not gene_mask is None:
+            self.subsetted = True
             rp_matrix = data_object[self.config.get('accessibility_assay', 'reg_potential_matrix').format(technology = self.technology)][gene_mask, :]
-        
         else:
             rp_matrix = data_object[self.config.get('accessibility_assay', 'reg_potential_matrix').format(technology = self.technology)][...]
-
+        
+        self.loaded = True
         return rp_matrix, dataset_ids
 
 
@@ -82,24 +85,27 @@ class LISA_Assay:
     def get_info(self, metadata_accessor):
         raise NotImplementedError()
 
-    def load(self, data_object, gene_mask = None):
-        self.rp_matrix, self.dataset_ids = self.load_rp_matrix(data_object, gene_mask = gene_mask)
-
     def predict(self, gene_mask, label_vector, data_object = None, debug = False):
         raise NotImplementedError()
 
-class PeakRP_Assay(LISA_Assay):
+    def load(self, data_object, gene_mask = None, oneshot = False):
+        self.rp_matrix, self.dataset_ids = self.load_rp_matrix(data_object, gene_mask = gene_mask, oneshot=oneshot)
+
+class PeakRP_Assay(LISA_RP_Assay):
 
     def predict(self, gene_mask, label_vector, data_object = None, debug = False):
 
         try:
             self.rp_matrix
         except AttributeError:
-            self.load(data_object, gene_mask= gene_mask)
+            self.load(data_object, gene_mask=gene_mask)
             
         self.log.append('Calculating {} peak-RP p-values ...'.format(self.technology))
 
-        subset_rp_matrix = self.rp_matrix[gene_mask, :]
+        if not self.subsetted:
+            subset_rp_matrix = self.rp_matrix[gene_mask, :]
+        else:
+            subset_rp_matrix  = self.rp_matrix
         
         p_vals = self.get_delta_RP_p_value(subset_rp_matrix, label_vector)
 
@@ -107,7 +113,6 @@ class PeakRP_Assay(LISA_Assay):
 
     def get_info(self, metadata_accessor):
         return dict()
-
 
 #Generator that repeatedly yields the same factor_binding and rp_map matrices with a new accessibility profile 
 #to the multiprocessing pool creator. This reduces data redundancy.
@@ -122,7 +127,7 @@ class KnockoutGenerator:
         for profile in self.accessibility_profiles.T:
             yield profile, self.factor_binding, self.rp_map
     
-class Accesibility_Assay(LISA_Assay):
+class Accesibility_Assay(LISA_RP_Assay):
 
     def __init__(self, technology, config, cores, log, *, rp_map, factor_binding, selection_model, chromatin_model):
         super().__init__(technology, config, cores, log)
@@ -204,13 +209,12 @@ class Accesibility_Assay(LISA_Assay):
 
         #find bins of gene-subsetted rp-map with RP > 0
         bin_mask = np.squeeze(np.array(self.rp_map[gene_mask, : ].tocsc().sum(axis = 0) > 0))
-
         #subset rp_map and factor hits on bins with RP > 0
         subset_factor_binding = self.factor_binding[bin_mask, :]
-
+        
         subset_rp_map = self.rp_map[gene_mask, :][:, bin_mask]
 
-        subset_rp_matrix = self.rp_matrix[gene_mask, :]
+        subset_rp_matrix = self.rp_matrix[gene_mask, :] if not self.subsetted else self.rp_matrix
 
         with self.log.section('Modeling {} purturbations:'.format(self.technology)):
             #DNase model building and purturbation

@@ -9,26 +9,22 @@ import configparser
 import argparse
 
 from collections.abc import Iterable
-from sys import stderr
+import sys
 import numpy as np
 import h5py as h5
-from scipy import stats, sparse
+from scipy import sparse
 import os
-import itertools
 import json
 import multiprocessing
-
-from utils import LoadingBar, Log, GeneSet, Gene
+from utils import LoadingBar, Log, LISA_Results
 
 _config = configparser.ConfigParser()
 _config.read('lisa_config.ini')
-
 
 class LISA:
     '''
     The LISA object is the user's interface with the LISA algorithm. It holds the parameters specified by the user and 
     handles data loading from hdf5 and 
-
     '''
 
     factor_binding_technologies = dict(
@@ -36,26 +32,23 @@ class LISA:
         motifs = 'Motifs'
     )
 
-    def __init__(self, species, *, 
-        background_strategy = 'regulatory',
-        num_background_genes = 3000,
+    def __init__(self, species, 
+        cores = 1,
+        knockout_method = 'chipseq',
         num_datasets_selected_anova = 200,
         num_datasets_selected = 10,
-        cores = -1,
-        isd_method = 'chipseq',
-        use_covariates = False,
         verbose = True,
         oneshot = False,
+        log = None,
     ):
-        self.isd_options = _config.get('lisa_params', 'isd_methods').split(',')
+        self.knockout_options = _config.get('lisa_params', 'isd_methods').split(',')
         self.background_options = _config.get('lisa_params', 'background_strategies').split(',')
         self.max_query_genes = int(_config.get('lisa_params', 'max_user_genelist_len'))
 
-        assert( isinstance(num_background_genes, int) )
+        
         assert( isinstance(num_datasets_selected, int) )
         assert( isinstance(num_datasets_selected_anova, int) )
 
-        self.num_background_genes = num_background_genes
         self.num_datasets_selected_anova = num_datasets_selected_anova
         self.num_datasets_selected = num_datasets_selected
 
@@ -64,31 +57,33 @@ class LISA:
         assert( num_datasets_selected_anova > num_datasets_selected ), 'Anova must select more datasets than the regression model'
         assert( num_datasets_selected_anova > 0 and num_datasets_selected > 0 ), 'Number of datasets selected must be positive'
 
-        assert( background_strategy in  self.background_options ), 'Background strategy must be in \{{}\}'.format(', '.join(self.background_options))
-        assert( isd_method in  self.isd_options ), 'ISD method must be \{{}\}'.format(', '.join(self.isd_options))
+        assert( knockout_method in  self.knockout_options ), 'ISD method must be \{{}\}'.format(', '.join(self.knockout_options))
         assert( species in ['mm10','hg38'] ), "Species must be either hg38 or mm10"
         
-        self.background_strategy = background_strategy
-        self.isd_method = self.factor_binding_technologies[isd_method]
+        self.isd_method = self.factor_binding_technologies[knockout_method]
         self.species = species
 
-        self.use_covariates = use_covariates
         self.data_source = _config.get('paths', 'h5_path').format(species = self.species)
-        self.log = Log(stderr if verbose else os.devnull)
+
+        if log is None:
+            self.log = Log(sys.stderr, verbose = verbose)
+        else:
+            self.log = log
+
         self._is_loaded = False
 
         self.assays = []
         self.oneshot = oneshot
 
-        self.log.append(
-"""
-___________________________________________________________________________________________________________________________
+        #load all gene information
+        self.all_genes = self._load_gene_info()
 
-Lisa: inferring transcriptional regulators through integrative modeling of public chromatin accessibility and ChIP-seq data
-https://genomebiology.biomedcentral.com/articles/10.1186/s13059-020-1934-6
-X. Shirley Liu Lab, 2020
-___________________________________________________________________________________________________________________________
-""")
+        #load gene axis labels for all assays, both these loading steps are very fast, and allow for more finely-tuned loading from the hdf5 later
+        with open(_config.get('genes','gene_locs').format(species = self.species), 'r') as f:
+            self.rp_map_locs = np.array([line.strip() for line in f.readlines()])
+
+        self.used_oneshot = False
+
 
     def _set_cores(self, cores):
         assert( isinstance(cores, int) )
@@ -103,7 +98,7 @@ ________________________________________________________________________________
 
     def _load_gene_info(self):
 
-        all_genes = GeneSet()
+        all_genes = gene_selection.GeneSet()
         
         with open(_config.get('genes','master_gene_list').format(species = self.species), 'r') as genes:
             all_genes.from_str(genes.read())
@@ -122,20 +117,15 @@ ________________________________________________________________________________
 
         rp_map = sparse.load_npz(_config.get('RP_map','matrix').format(species = self.species)).tocsr()
 
-        #select genes of interest from rp_map
-        with open(_config.get('genes','gene_locs').format(species = self.species), 'r') as f:
-            rp_map_locs = np.array([line.strip() for line in f.readlines()])
-
-        return rp_map, rp_map_locs
+        return rp_map
 
 
-    def add_assay(self, data_object, assay):
-        if not self.oneshot:
-            assay.load(data_object)
+    def add_assay(self, data_object, gene_mask, assay):
+        assay.load(data_object, gene_mask=gene_mask, oneshot=self.oneshot)
         self.assays.append(assay)
 
 
-    def _load_data(self):
+    def _load_data(self, gene_mask = None):
 
         if self._is_loaded:
             raise AssertionError('Data is already loaded')
@@ -143,21 +133,18 @@ ________________________________________________________________________________
             with self.log.section('Loading data into memory (only on first prediction):') as log:
 
                 with h5.File(self.data_source, 'r') as data:
-                    
-                    log.append('Loading gene information ...')
-                    self.all_genes = self._load_gene_info()
 
                     with log.section('Loading binding data ...') as log:
                         self.factor_binding = self._load_factor_binding_data(data)
 
                     log.append('Loading regulatory potential map ...')
-                    self.rp_map, self.rp_map_locs = self._load_rp_map(data)
+                    self.rp_map = self._load_rp_map(data)
 
-                    self.add_assay(data, 
+                    self.add_assay(data, gene_mask,
                         LISA_assays.PeakRP_Assay(self.isd_method, _config, self.cores, self.log)
                     )
 
-                    self.add_assay(data, 
+                    self.add_assay(data, gene_mask,
                         LISA_assays.Accesibility_Assay('DNase', _config, self.cores, self.log,
                             rp_map = self.rp_map, factor_binding = self.factor_binding,
                             selection_model = LR_BinarySearch_SampleSelectionModel(self.num_datasets_selected_anova, self.num_datasets_selected),
@@ -165,7 +152,7 @@ ________________________________________________________________________________
                         )
                     )
 
-                    self.add_assay(data, 
+                    self.add_assay(data, gene_mask,
                         LISA_assays.Accesibility_Assay('H3K27ac', _config, self.cores, self.log,
                             rp_map = self.rp_map, factor_binding = self.factor_binding,
                             selection_model = LR_BinarySearch_SampleSelectionModel(self.num_datasets_selected_anova, self.num_datasets_selected),
@@ -204,7 +191,6 @@ ________________________________________________________________________________
             tissue = [self.metadict[_id]['tissue'] for _id in sample_ids]
         )
 
-    
     @staticmethod
     def combine_tests(p_vals, weights=None):
         #https://arxiv.org/abs/1808.09011
@@ -226,7 +212,7 @@ ________________________________________________________________________________
         return combined_p_value
 
     #process user-supplied text
-    def select_genes(self, query_list, background_list):
+    def make_gene_mask(self, query_list, background_list, num_background_genes, background_strategy):
         '''
         query_list: list of any text that may be a query gene
         background_list : list of any text that may be a background gene
@@ -242,7 +228,7 @@ ________________________________________________________________________________
         
         #match user-supplied text with genes, and select background genes
         label_dict, gene_info_dict = gene_selection.select_genes(query_list, self.all_genes, 
-            num_background_genes = self.num_background_genes, background_strategy = self.background_strategy, 
+            num_background_genes = num_background_genes, background_strategy = background_strategy, 
             max_query_genes = self.max_query_genes, background_list = background_list)
 
         #Show user number of query and background genes selected
@@ -256,19 +242,23 @@ ________________________________________________________________________________
         
         return gene_mask, label_vector, gene_info_dict
 
-    def predict(self, query_list, background_list = []):
+    def predict(self, query_list, 
+            background_list = [], 
+            background_strategy = 'regulatory',
+            num_background_genes = 3000,
+        ):
 
-        self.log.append('Initializing LISA using {} cores ...'.format(str(self.cores)))
-
-        if not self._is_loaded:
-            self._load_data()
-
-        assert( isinstance(query_list, Iterable) )
+        if self.oneshot and self.used_oneshot:
+            raise AssertionError('When instantiated in one-shot, model cannot be used for multiple predictions')
 
         if background_list is None:
             background_list = []
-        
+        assert( isinstance(num_background_genes, int) )
+        assert( background_strategy in  self.background_options ), 'Background strategy must be in \{{}\}'.format(', '.join(self.background_options))
+        assert( isinstance(query_list, Iterable) )
         assert( isinstance(background_list, Iterable))
+
+        self.log.append('Initializing LISA using {} cores ...'.format(str(self.cores)))
 
         try:
                             
@@ -277,7 +267,10 @@ ________________________________________________________________________________
                 if len(background_list) > 0 and self.background_strategy == 'provided':
                     self.log.append('User provided background genes!')
                 
-            gene_mask, label_vector, gene_info_dict = self.select_genes(query_list, background_list)
+            gene_mask, label_vector, gene_info_dict = self.make_gene_mask(query_list, background_list, num_background_genes, background_strategy)
+
+            if not self._is_loaded:
+                self._load_data(gene_mask)
 
             with h5.File(self.data_source, 'r') as data:
 
@@ -298,112 +291,173 @@ ________________________________________________________________________________
 
         self.log.append('Formatting output ...')
 
-        results = dict(
+        results = LISA_Results.fromdict(
             **self._get_metadata(self.factor_dataset_ids),
             combined_p_value = combined_p_values,
             combined_p_value_adjusted = list(np.minimum(np.array(combined_p_values) * len(combined_p_values), 1.0)),
-            **assay_pvals,
+            **assay_pvals
         )
 
-        #convert to row-indexed data and sort by combined p-value
-        results_table = list(zip(*results.values()))
-        results_table = sorted(results_table, key = lambda col : col[5])
+        results = results.sortby('combined_p_value_adjusted', add_rank = True)
         
-        #eliminate duplicate TF samples for summary results
-        encountered = {}
-        summary = []
-        for result_line in results_table:
-            factor_name = result_line[0]
-            if not factor_name in encountered:
-                summary.append(result_line[:7])
-                encountered[factor_name] = True
-
-        #transpose to column-indexed data and add "Rank" column
-        summary_columns = [list(range(1, len(summary) + 1)), * list(zip(*summary))]
-        summary_headers = ['Rank', * results.keys()]
-        #convert to dictionary
-        summary = dict( zip(summary_headers, summary_columns) )
-        
-        #convert to dictionary
-        results = dict( zip(results.keys(), list(zip(*results_table))) )
-       
         self.log.append('Done!')
-
+        
+        self.used_oneshot = True
         #return model_metadata as big dictionary
-        return summary, dict(
+        return results, dict(
             **gene_info_dict,
-            results = results,
             **assay_info
         )
 
-    @staticmethod
-    def pretty_print_results(results_dict, top_n = 200):
-        
-        headers = list(results_dict.keys())
-        rows = list(zip(*[results_list[:top_n] for results_list in results_dict.values()]))
-        for line in [headers, *rows]:
-            print('\t'.join([str(value) for value in line]))
 
+INSTANTIATION_KWARGS = ['cores','knockout_method','verbose','oneshot']
+PREDICTION_KWARGS = ['background_list','num_background_genes','background_strategy']
+
+def extract_kwargs(args, keywords):
+    return {key : vars(args)[key] for key in keywords}
+
+def is_valid_prefix(prefix):
+
+    if os.path.isdir(prefix) or os.path.isfile(prefix) or os.path.isdir(os.path.dirname(prefix)):
+        return prefix
+        
+    raise argparse.ArgumentTypeError('{}: Invalid file prefix.'.format(prefix))
+
+
+def lisa_oneshot(args):
+
+    results, metadata = LISA(args.species, **extract_kwargs(args, INSTANTIATION_KWARGS)).predict(args.query_list.readlines(), **extract_kwargs(args, PREDICTION_KWARGS))
+    
+    if args.save_metadata:
+        if args.output_prefix:
+            metadata_filename = args.output_prefix + '.metadata.json' 
+        else:
+            metadata_filename = os.path.basename(args.query_list.name) + '.metadata.json'
+
+        with open(metadata_filename, 'w') as f:
+            f.write(json.dumps(metadata, indent=4))
+
+    if not args.output_prefix is None:
+        with open(args.output_prefix + '.lisa.tsv', 'w') as f:
+            f.write(results.to_tsv())
+    else:
+        print(results.to_tsv())
+        
+def lisa_multi(args):
+
+    log = Log(target = sys.stderr, verbose = args.verbose)
+
+    lisa = LISA(args.species, **extract_kwargs(args, INSTANTIATION_KWARGS), log = log)
+
+    results_summary = []
+
+    for query in args.query_lists:
+        
+        query_name = os.path.basename(query.name)
+
+        with log.section('Modeling gene list {}:'.format(str(query_name))):
+
+            results, metadata = lisa.predict(query.readlines(), **extract_kwargs(args, PREDICTION_KWARGS))
+
+            with open(args.output_prefix + query_name + '.lisa.tsv', 'w') as f:
+                f.write(results.to_tsv())
+
+            if args.save_metadata:
+                with open(args.output_prefix + query_name + '.metadata.json', 'w') as f:
+                    f.write(json.dumps(metadata, indent=4))
+
+            top_TFs = results.subset(range(0,20)).todict()['factor_name']
+            
+            top_TFs_unique, encountered = [], set()
+            for TF in top_TFs:
+                if not TF in encountered:
+                    top_TFs_unique.append(TF)
+                    encountered.add(TF)
+        
+
+            results_summary.append((query_name, top_TFs_unique))
+
+    print('Sample\tTop Regulatory Factors')
+    for result_line in results_summary:
+        print(result_line[0], ', '.join(result_line[1]), sep = '\t')
+
+
+def lisa_one_v_rest():
+
+    raise NotImplementedError()
+
+
+def build_common_args(parser):
+    parser.add_argument('species', choices = ['hg38','mm10'], help = 'Find TFs associated with human (hg38) or mouse (mm10) genes')
+    parser.add_argument('-c','--cores', required = True, type = int, default = 1)
+    parser.add_argument('--seed', type = int, default = None, help = 'Random seed for gene selection. Allows for reproducing exact results.')
+    parser.add_argument('--knockout_method', type = str, choices = _config.get('lisa_params','isd_methods').split(','), default = 'chipseq',
+        help = 'Use ChIP-seq peaks (recommended) or motif hits to represent TF binding')
+    parser.add_argument('--save_metadata', action = 'store_true', default = False, help = 'Save json-formatted metadata from processing each gene list.')
+
+
+def build_multiple_lists_args(parser):
+    parser.add_argument('query_lists', type = argparse.FileType('r', encoding = 'utf-8'), nargs = "+", help = 'user-supplied gene lists. One gene per line in either symbol or refseqID format')
+    parser.add_argument('-o','--output_prefix', required = True, type = is_valid_prefix, help = 'Output file prefix.')
+    parser.add_argument('-b','--num_background_genes', type = int, default = _config.get('lisa_params', 'background_genes'),
+        help = 'Number of sampled background genes to compare to user-supplied genes. These genes are selection from other gene lists.')
+    parser.add_argument('--random_background', action = 'store_const', const = 'random', default = 'regulatory', dest = 'background_strategy', help = 'Use random background selection rather than "regulatory" selection.')
+    parser.add_argument('-v','--verbose',type = int, default = 2)
 
 if __name__ == "__main__":
 
     #define command-line arguments
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        description = 'Landscape In Silico deletion Analysis (LISA): Find transcription factors important to the regulation of your gene set using using ChIP-seq informed purturbations of chromatin landscape models.'
-        )
+        description =
+"""
+___________________________________________________________________________________________________________________________
 
-    parser.add_argument('query_genes', type = argparse.FileType('r', encoding = 'utf-8'), help = 'user-supplied gene list. One gene per line in either symbol or refseqID format')
+Lisa: inferring transcriptional regulators through integrative modeling of public chromatin accessibility and ChIP-seq data
+https://genomebiology.biomedcentral.com/articles/10.1186/s13059-020-1934-6
+X. Shirley Liu Lab, 2020
+___________________________________________________________________________________________________________________________
+""")
 
-    parser.add_argument('species', choices = ['hg38','mm10'], help = 'Find TFs associated with human (hg38) or mouse (mm10) genes')
+    subparsers = parser.add_subparsers(help = 'commands')
 
-    parser.add_argument('-o','--metadata_output', required = False, type = argparse.FileType('w', encoding = 'utf-8'), help = 'metadata file output prefix. If left empty, will not save.')
+    #__ LISA oneshot command __#################
 
-    parser.add_argument('-n','--num_results', type = int, default = 200, help = 'Number of predictions to return.')
+    oneshot_parser = subparsers.add_parser('oneshot', help = 'Use LISA to infer genes from one gene list. If you have multiple lists, this option will be slower than using "multi" due to data-loading time.\n')
+    build_common_args(oneshot_parser)
 
-    parser.add_argument('-s', '--background_strategy', choices = _config.get('lisa_params', 'background_strategies').split(','),
+    oneshot_parser.add_argument('query_list', type = argparse.FileType('r', encoding = 'utf-8'), help = 'user-supplied gene lists. One gene per line in either symbol or refseqID format')
+    oneshot_parser.add_argument('-o','--output_prefix', required = False, type = is_valid_prefix, help = 'Output file prefix. If left empty, will write results to stdout.')
+    oneshot_parser.add_argument('--background_strategy', choices = _config.get('lisa_params', 'background_strategies').split(','),
         default = 'regulatory',
         help = """Background genes selection strategy. LISA samples background genes to compare to user\'s genes-of-interest from a diverse
         regulatory background (regulatory - recommended), randomly from all genes (random), or uses a user-provided list (provided).
         """)
-
-    parser.add_argument('--background_genes', type = argparse.FileType('r', encoding = 'utf-8'), required = False,
-        help = 'user-supplied list of backgroung genes. Used when -s flag is set to "provided"')
-
-    parser.add_argument('-b','--num_background_genes', type = int, default = _config.get('lisa_params', 
-    'background_genes'),
+    background_genes_group = oneshot_parser.add_mutually_exclusive_group()
+    background_genes_group.add_argument('--background_list', type = argparse.FileType('r', encoding = 'utf-8'), required = False,
+        help = 'user-supplied list of backgroung genes. Used when --background_strategy flag is set to "provided"')
+    background_genes_group.add_argument('-b','--num_background_genes', type = int, default = _config.get('lisa_params', 'background_genes'),
         help = 'Number of sampled background genes to compare to user-supplied genes')
+    oneshot_parser.add_argument('-v','--verbose',type = int, default = 4)
+    oneshot_parser.set_defaults(func = lisa_oneshot, oneshot = True)
+    
+    #__ LISA multi command __#################
 
-    parser.add_argument('-a','--num_datasets_selected_anova', type = int, default = _config.get('lisa_params', 'num_anova_selected') or 200,
-        help = 'Number of datasets to select using anova as preliminary filter')
+    multi_parser = subparsers.add_parser('multi', help = 'Process multiple genelists, provided one list per line, genes seperated by commas. This reduces data-loading time if using the same parameters for all lists.\n')
+    build_common_args(multi_parser)
+    build_multiple_lists_args(multi_parser)
+    multi_parser.set_defaults(func = lisa_multi, oneshot = False, background_list = None)
+    
+    #__ LISA one-vs-rest command __#################
 
-    parser.add_argument('-d','--num_datasets_selected', type = int, default = _config.get('lisa_params','num_datasets_selected') or 10,
-        help = 'Number of discriminative datasets to select using logistic regression model. Number of datasets selected linearly impacts performance')
-    parser.add_argument('-c','--cores', type = int, default = -1)
-
-    parser.add_argument('-m','--isd_method', type = str, choices = _config.get('lisa_params','isd_methods').split(','), default = 'chipseq',
-        help = 'Use ChIP-seq peaks (recommended) or motif hits to represent TF binding')
+    one_v_rest_parser = subparsers.add_parser('one-vs-rest', help = 'Compare gene lists in a one-vs-rest fashion. Useful downstream of cluster analysis.\n')
+    build_common_args(one_v_rest_parser)
+    build_multiple_lists_args(one_v_rest_parser)
+    one_v_rest_parser.set_defaults(func = lisa_one_v_rest, oneshot = False, background_list = None)
 
     args = parser.parse_args()
 
-    query_list = args.query_genes.readlines()
-    del args.query_genes
-
-    background_list = args.background_genes
-    del args.background_genes
-
-    output_filestream = args.metadata_output
-    del args.metadata_output
-
-    num_results = args.num_results
-    del args.num_results
-    
-    lisa = LISA(**vars(args))
-    predictions, metadata = lisa.predict(query_list, background_list)
-
-    if not output_filestream is None:
-        metadata['args'] = dict(**vars(args))
-        output_filestream.write(json.dumps(metadata, indent = 4))
-        output_filestream.close()
-
-    lisa.pretty_print_results(predictions, top_n = num_results)
+    try:
+        args.func(args)
+    except AttributeError:
+        print(parser.print_help(), file = sys.stderr)
