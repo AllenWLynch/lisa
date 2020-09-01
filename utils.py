@@ -155,3 +155,13 @@ class LISA_Results:
             '\t'.join([str(value) for value in line])
             for line in [output_lines.results_headers, *output_lines.results_rows]
         ])
+
+    def filter_rows(self, filter_func, colname):
+
+        colnum = self.get_colnum(colname)
+        subset_rows = [
+            rownum for rownum, row in enumerate(self.results_rows)
+            if filter_func(row[colnum])
+        ]
+
+        return self.subset(subset_rows)

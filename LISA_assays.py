@@ -73,7 +73,6 @@ class LISA_RP_Assay:
             p_vals = [
                 mannu_test_function((q,b)) for q,b in test_parameters
             ]
-
         else:
             with Pool(self.cores) as p:
                 p_vals = p.map(mannu_test_function, test_parameters)
@@ -101,13 +100,9 @@ class PeakRP_Assay(LISA_RP_Assay):
             self.load(data_object, gene_mask=gene_mask)
             
         self.log.append('Calculating {} peak-RP p-values ...'.format(self.technology))
-
-        if not self.subsetted:
-            subset_rp_matrix = self.rp_matrix[gene_mask, :]
-        else:
-            subset_rp_matrix  = self.rp_matrix
         
-        p_vals = self.get_delta_RP_p_value(subset_rp_matrix, label_vector)
+        #calculate p-values by directly applying mannu-test on RP matrix. Subset the RP matrix for genes-of-interest if required
+        p_vals = self.get_delta_RP_p_value(self.rp_matrix[gene_mask, :] if not self.subsetted else self.rp_matrix, label_vector)
 
         return p_vals
 

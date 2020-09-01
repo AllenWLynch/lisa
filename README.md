@@ -1,6 +1,5 @@
 
 # LISA: Landscape In-Silico deletion Analysis
-<hr>
 
 ## About
 
@@ -31,8 +30,7 @@ positional arguments:
     oneshot             Use LISA to infer genes from one gene list. If you
                         have multiple lists, this option will be slower than
                         using "multi" due to data-loading time.
-    multi               Process multiple genelists, provided one list per
-                        line, genes seperated by commas. This reduces data-
+    multi               Process multiple genelists. This reduces data-
                         loading time if using the same parameters for all
                         lists.
     one-vs-rest         Compare gene lists in a one-vs-rest fashion. Useful
@@ -59,7 +57,7 @@ This command prints a table of TFs sorted by regulatory effect on the genes-of-i
 ```bash
 >>>LISA multi hg38 genelists/*.txt -o results/ -c 10
 ```
-| Sample |  Top Regulatory Factors |
+| Sample |  Top Regulatory Factors (p < 0.05) |
 |--|--|
 | nfe2l2_down.txt | NR3C1, RELA, CEBPB, NFE2L2, FOSL2, NKX2-1, HES2, JUN, FOXA1 |
 | nfe2l2_up.txt  | HOXB13, NR3C1, SMARCA4, FOXA2, FOXA1, GATA3 |

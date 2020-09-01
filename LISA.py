@@ -24,9 +24,9 @@ _config.read('lisa_config.ini')
 class LISA:
     '''
     The LISA object is the user's interface with the LISA algorithm. It holds the parameters specified by the user and 
-    handles data loading from hdf5 and 
+    handles data loading from hdf5
     '''
-
+    #class dictionary, converts cmd line alias to standard symbols for knockout methods
     factor_binding_technologies = dict(
         chipseq = 'ChIP-seq',
         motifs = 'Motifs'
@@ -41,10 +41,10 @@ class LISA:
         oneshot = False,
         log = None,
     ):
+        #all paramter checking is done on LISA instantiation to ensure consistency between python module and cmd line usage
         self.knockout_options = _config.get('lisa_params', 'isd_methods').split(',')
         self.background_options = _config.get('lisa_params', 'background_strategies').split(',')
         self.max_query_genes = int(_config.get('lisa_params', 'max_user_genelist_len'))
-
         
         assert( isinstance(num_datasets_selected, int) )
         assert( isinstance(num_datasets_selected_anova, int) )
@@ -65,11 +65,13 @@ class LISA:
 
         self.data_source = _config.get('paths', 'h5_path').format(species = self.species)
 
+        #use provided log object or create a new one. Applications which call LISA may want to pass in their own log object for control of indentation
         if log is None:
             self.log = Log(sys.stderr, verbose = verbose)
         else:
             self.log = log
-
+        
+        #data has not yet been loaded
         self._is_loaded = False
 
         self.assays = []
@@ -87,13 +89,16 @@ class LISA:
 
     def _set_cores(self, cores):
         assert( isinstance(cores, int) )
-
+        #leave one core out for the rest of us
         max_cores = multiprocessing.cpu_count() - 1
         if cores <= -1:
             cores = max_cores
+        #use the minimum number of cores between the user's specificaion, the number of datasets to be processed in parallel, and the number of cores on the machine.
+        #this prevents LISA from using more resources than required.
         self.cores = min(cores, max_cores, self.num_datasets_selected)
 
     def _preprocess_gene_list(self, genes):
+        #make sure gene lists are composed of stripped strings
         return [str(gene).strip() for gene in genes if len(gene) > 0]
 
     def _load_gene_info(self):
@@ -140,6 +145,8 @@ class LISA:
                     log.append('Loading regulatory potential map ...')
                     self.rp_map = self._load_rp_map(data)
 
+                    #Add assays to LISA's steps. Each assay follows the same instantiation and prediction calling, making them modular and substitutable.
+                    #Adding an assay loads the required data for that assay
                     self.add_assay(data, gene_mask,
                         LISA_assays.PeakRP_Assay(self.isd_method, _config, self.cores, self.log)
                     )
@@ -162,6 +169,7 @@ class LISA:
 
                 self.log.append('Loading metadata ...')
 
+                #reformat metadata tsv into conventiant id-indexed dictionary
                 with open(_config.get('paths','metadata'), 'r', encoding = 'latin') as metdata_file:
                     metadata = [[field.strip() for field in line.split('\t')] for line in metdata_file.readlines()]
                                         
@@ -194,6 +202,7 @@ class LISA:
     @staticmethod
     def combine_tests(p_vals, weights=None):
         #https://arxiv.org/abs/1808.09011
+        #combine p-values from all assays
         p_vals = np.array(p_vals).astype(np.float64)
 
         assert(len(p_vals.shape) == 2 ), 'P-values must be provided as matrix of (samples, multiple p-values)'
@@ -264,21 +273,24 @@ class LISA:
                             
             with self.log.section('Matching genes and selecting background ...'):
 
-                if len(background_list) > 0 and self.background_strategy == 'provided':
+                if len(background_list) > 0 and background_strategy == 'provided':
                     self.log.append('User provided background genes!')
                 
-            gene_mask, label_vector, gene_info_dict = self.make_gene_mask(query_list, background_list, num_background_genes, background_strategy)
+                gene_mask, label_vector, gene_info_dict = self.make_gene_mask(query_list, background_list, num_background_genes, background_strategy)
 
             if not self._is_loaded:
                 self._load_data(gene_mask)
 
             with h5.File(self.data_source, 'r') as data:
-
+                
+                #run each assay specified in the _load_data step. Each assay returns a p_value for each factor binding sample, and returns metadata
+                #each assay takes the same arguments and makes the same returns but can perform different tests
                 assay_pvals, assay_info = {},{}
                 for assay in self.assays:
                     assay_pvals[assay.technology + '_p_value'] = assay.predict(gene_mask, label_vector, data_object = data)
                     assay_info[assay.technology + '_model_info'] = assay.get_info(self._get_metadata)
 
+            #combine p-values from all assays on a per-sample basis
             with self.log.section('Mixing effects using Cauchy combination ...'):
 
                 aggregate_pvals = np.array(list(assay_pvals.values())).T
@@ -291,6 +303,7 @@ class LISA:
 
         self.log.append('Formatting output ...')
 
+        #instantiate a lisa results object
         results = LISA_Results.fromdict(
             **self._get_metadata(self.factor_dataset_ids),
             combined_p_value = combined_p_values,
@@ -302,6 +315,7 @@ class LISA:
         
         self.log.append('Done!')
         
+        #if using in one-shot mode, prevent user from calling "predict" on this object again
         self.used_oneshot = True
         #return model_metadata as big dictionary
         return results, dict(
@@ -309,6 +323,8 @@ class LISA:
             **assay_info
         )
 
+
+#____COMMAND LINE INTERFACE________
 
 INSTANTIATION_KWARGS = ['cores','knockout_method','verbose','oneshot']
 PREDICTION_KWARGS = ['background_list','num_background_genes','background_strategy']
@@ -355,7 +371,7 @@ def lisa_multi(args):
         
         query_name = os.path.basename(query.name)
 
-        with log.section('Modeling gene list {}:'.format(str(query_name))):
+        with log.section('Modeling {}:'.format(str(query_name))):
 
             results, metadata = lisa.predict(query.readlines(), **extract_kwargs(args, PREDICTION_KWARGS))
 
@@ -366,7 +382,7 @@ def lisa_multi(args):
                 with open(args.output_prefix + query_name + '.metadata.json', 'w') as f:
                     f.write(json.dumps(metadata, indent=4))
 
-            top_TFs = results.subset(range(0,20)).todict()['factor_name']
+            top_TFs = results.filter_rows(lambda x : x <= 0.05, 'combined_p_value_adjusted').todict()['factor_name']
             
             top_TFs_unique, encountered = [], set()
             for TF in top_TFs:
@@ -377,7 +393,7 @@ def lisa_multi(args):
 
             results_summary.append((query_name, top_TFs_unique))
 
-    print('Sample\tTop Regulatory Factors')
+    print('Sample\tTop Regulatory Factors (p < 0.05)')
     for result_line in results_summary:
         print(result_line[0], ', '.join(result_line[1]), sep = '\t')
 
@@ -443,7 +459,7 @@ ________________________________________________________________________________
     
     #__ LISA multi command __#################
 
-    multi_parser = subparsers.add_parser('multi', help = 'Process multiple genelists, provided one list per line, genes seperated by commas. This reduces data-loading time if using the same parameters for all lists.\n')
+    multi_parser = subparsers.add_parser('multi', help = 'Process multiple genelists. This reduces data-loading time if using the same parameters for all lists.\n')
     build_common_args(multi_parser)
     build_multiple_lists_args(multi_parser)
     multi_parser.set_defaults(func = lisa_multi, oneshot = False, background_list = None)
