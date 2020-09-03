@@ -55,7 +55,10 @@ def save_and_get_top_TFs(args, query_name, results, metadata):
         with open(args.output_prefix + query_name + '.metadata.json', 'w') as f:
             f.write(json.dumps(metadata, indent=4))
 
-    top_TFs = results.filter_rows(lambda x : x <= 0.05, 'combined_p_value_adjusted').todict()['factor']
+    try:
+        top_TFs = results.filter_rows(lambda x : x <= 0.05, 'combined_p_value_adjusted').todict()['factor']
+    except KeyError:
+        top_TFs = ['None']
 
     top_TFs_unique, encountered = [], set()
     for TF in top_TFs:
@@ -91,7 +94,7 @@ def lisa_multi(args):
                 results_summary.append((query_name, top_TFs_unique))
             
             except AssertionError as err:
-                log.append(str(err))
+                log.append('ERROR: ' + str(err))
 
     print_results_multi(results_summary)
 
@@ -104,7 +107,7 @@ def lisa_one_v_rest(args):
     queries = {query.name : query.readlines() for query in args.query_lists}
 
     cluster_lists = {
-        query_name : (query_genes, [
+        os.path.basename(query_name) : (query_genes, [
             background_gene
             for j, background in enumerate(queries.values()) for background_gene in background if not j == i
         ])
@@ -113,17 +116,17 @@ def lisa_one_v_rest(args):
 
     results_summary = []
     for query_name, genelists in cluster_lists.items():
-        
+
         with log.section('Modeling {}:'.format(str(query_name))):
             try:
-                results, metadata = lisa.predict(genelists[0], background_list = genelists[1], **extract_kwargs(args, PREDICTION_KWARGS))
+                results, metadata = lisa.predict(genelists[0], background_list = genelists[1], **extract_kwargs(args, ['background_strategy', 'seed']))
 
                 top_TFs_unique = save_and_get_top_TFs(args, query_name, results, metadata)
             
                 results_summary.append((query_name, top_TFs_unique))
             
             except AssertionError as err:
-                log.append(str(err))
+                log.append('ERROR: ' + str(err))
 
     print_results_multi(results_summary)
 
@@ -149,12 +152,9 @@ if __name__ == "__main__":
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         description =
 """
-___________________________________________________________________________________________________________________________
-
-Lisa: inferring transcriptional regulators through integrative modeling of public chromatin accessibility and ChIP-seq data
-https://genomebiology.biomedcentral.com/articles/10.1186/s13059-020-1934-6
-X. Shirley Liu Lab, 2020
-___________________________________________________________________________________________________________________________
+Lisa: inferring transcriptional regulators through integrative modeling of public chromatin accessibility and ChIP-seq data\n
+https://genomebiology.biomedcentral.com/articles/10.1186/s13059-020-1934-6\n
+X. Shirley Liu Lab, 2020\n
 """)
 
     parser.add_argument('--version', action = 'version', version = __version__)

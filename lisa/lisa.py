@@ -213,11 +213,6 @@ class LISA:
 
     def _download_data(self):
 
-        print(__file__)
-        print('here')
-
-        assert(False)
-
         with self.log.section('Grabbing {} data (~15 minutes):'.format(self.species)):
             
             self.log.append('Downloading from database ...')
