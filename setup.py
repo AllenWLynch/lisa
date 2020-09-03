@@ -23,4 +23,5 @@ X. Shirley Liu Lab, 2020""",
         'scikit-learn'
     ],
     include_package_data=True,
+    python_requires='>=3.6',
 )
