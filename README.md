@@ -160,7 +160,7 @@ The CLI for "lisa multi" and "lisa one-vs-rest" commands is similar, but the dif
 Once installed, LISA may also be used as a python module:
 
 ```python
-from LISA import LISA
+from lisa import LISA
 import pandas as pd
 
 lisa = LISA('hg38', cores = 10)
