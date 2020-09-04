@@ -7,6 +7,7 @@ LISA predicts which TFs regulate a set of genes using integrative modeling of ch
 
 ## Requirements
 
+* Mac or Linux OS
 * Python 3.6+
 * 15 GB of available storage space
 
