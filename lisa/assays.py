@@ -36,24 +36,23 @@ class LISA_RP_Assay:
     invitro_metadata = ['factor','cell_line','cell_type','tissue']
     insilico_metadata = ['factor','dbd','description','cell_line']
 
-    def __init__(self, technology, config, cores, log, metadata_headers, metadata_path):
+    def __init__(self, *, technology, config, cores, log, metadata_headers, metadata_path, oneshot):
         self.config = config
         self.technology = technology
         self.cores = cores
         self.log = log
         self.loaded = False
-        self.subsetted = False
+        self.oneshot = False
         self.metadata_headers = metadata_headers
         self.metadata_path = metadata_path
 
-    def load_rp_matrix(self, data_object, gene_mask = None, oneshot = False):
+    def load_rp_matrix(self, data_object, gene_mask = None):
 
         self.log.append('Loading {} RP matrix ...'.format(self.technology))
         
         dataset_ids = data_object[self.config.get('accessibility_assay', 'reg_potential_dataset_ids').format(technology = self.technology)][...].astype(str)
 
-        if oneshot and not gene_mask is None:
-            self.subsetted = True
+        if self.oneshot and not gene_mask is None:
             rp_matrix = data_object[self.config.get('accessibility_assay', 'reg_potential_matrix').format(technology = self.technology)][gene_mask, :]
         else:
             rp_matrix = data_object[self.config.get('accessibility_assay', 'reg_potential_matrix').format(technology = self.technology)][...]
@@ -100,8 +99,8 @@ class LISA_RP_Assay:
 
         return {metaline[0] : dict(zip(meta_headers[1:], metaline[1:])) for metaline in metadata}
 
-    def load(self, data_object, gene_mask = None, oneshot = False):
-        self.rp_matrix, self.dataset_ids = self.load_rp_matrix(data_object, gene_mask = gene_mask, oneshot=oneshot)
+    def load(self, data_object, gene_mask = None):
+        self.rp_matrix, self.dataset_ids = self.load_rp_matrix(data_object, gene_mask = gene_mask)
         self.metadata = self.load_metadata()
 
     def get_metadata(self, sample_ids):
@@ -115,7 +114,7 @@ class LISA_RP_Assay:
 
 class PeakRP_Assay(LISA_RP_Assay):
 
-    def predict(self, gene_mask, label_vector, data_object = None, debug = False):
+    def predict(self, gene_mask, label_vector, data_object, debug = False):
 
         try:
             self.rp_matrix
@@ -125,7 +124,7 @@ class PeakRP_Assay(LISA_RP_Assay):
         self.log.append('Calculating {} peak-RP p-values ...'.format(self.technology))
         
         #calculate p-values by directly applying mannu-test on RP matrix. Subset the RP matrix for genes-of-interest if required
-        p_vals = self.get_delta_RP_p_value(self.rp_matrix[gene_mask, :] if not self.subsetted else self.rp_matrix, label_vector)
+        p_vals = self.get_delta_RP_p_value(self.rp_matrix[gene_mask, :] if not self.oneshot else self.rp_matrix, label_vector)
 
         return p_vals
 
@@ -150,9 +149,10 @@ class KnockoutGenerator:
     
 class Accesibility_Assay(LISA_RP_Assay):
 
-    def __init__(self, technology, config, cores, log, metadata_path, *, rp_map, factor_binding, selection_model, chromatin_model,
+    def __init__(self, *, technology, config, cores, log, metadata_path, oneshot, rp_map, factor_binding, selection_model, chromatin_model,
         metadata_headers = LISA_RP_Assay.invitro_metadata):
-        super().__init__(technology, config, cores, log, metadata_headers, metadata_path)
+        super().__init__(technology = technology, config=config,cores=cores, log=log, metadata_headers=metadata_headers,
+            metadata_path=metadata_path, oneshot=oneshot)
         self.rp_map = rp_map
         self.factor_binding = factor_binding
         self.selection_model = selection_model
@@ -221,23 +221,24 @@ class Accesibility_Assay(LISA_RP_Assay):
         return delta_regulation_score, datacube
 
     
-    def predict(self, gene_mask, label_vector, debug = False, *, data_object):
-
-        try:
-            self.rp_matrix
-        except AttributeError:
-            self.load(data_object, gene_mask= gene_mask)
-
-        #find bins of gene-subsetted rp-map with RP > 0
-        bin_mask = np.squeeze(np.array(self.rp_map[gene_mask, : ].tocsc().sum(axis = 0) > 0))
-        #subset rp_map and factor hits on bins with RP > 0
-        subset_factor_binding = self.factor_binding[bin_mask, :]
-        
-        subset_rp_map = self.rp_map[gene_mask, :][:, bin_mask]
-
-        subset_rp_matrix = self.rp_matrix[gene_mask, :] if not self.subsetted else self.rp_matrix
+    def predict(self, gene_mask, label_vector, data_object, debug = False):
 
         with self.log.section('Modeling {} purturbations:'.format(self.technology)):
+            
+            try:
+                self.rp_matrix
+            except AttributeError:
+                self.load(data_object, gene_mask= gene_mask)
+
+            #find bins of gene-subsetted rp-map with RP > 0
+            bin_mask = np.squeeze(np.array(self.rp_map[gene_mask, : ].tocsc().sum(axis = 0) > 0))
+            #subset rp_map and factor hits on bins with RP > 0
+            subset_factor_binding = self.factor_binding[bin_mask, :]
+            
+            subset_rp_map = self.rp_map[gene_mask, :][:, bin_mask]
+
+            subset_rp_matrix = self.rp_matrix[gene_mask, :] if not self.oneshot else self.rp_matrix
+
             #DNase model building and purturbation
             self.log.append('Selecting discriminative datasets and training chromatin model ...')
 
