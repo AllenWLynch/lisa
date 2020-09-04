@@ -55,6 +55,7 @@ class LISA_RP_Assay:
         if self.oneshot and not gene_mask is None:
             rp_matrix = data_object[self.config.get('accessibility_assay', 'reg_potential_matrix').format(technology = self.technology)][gene_mask, :]
         else:
+            self.oneshot = False
             rp_matrix = data_object[self.config.get('accessibility_assay', 'reg_potential_matrix').format(technology = self.technology)][...]
         
         self.loaded = True
@@ -224,7 +225,7 @@ class Accesibility_Assay(LISA_RP_Assay):
     def predict(self, gene_mask, label_vector, data_object, debug = False):
 
         with self.log.section('Modeling {} purturbations:'.format(self.technology)):
-            
+
             try:
                 self.rp_matrix
             except AttributeError:
