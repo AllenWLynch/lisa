@@ -6,7 +6,7 @@ with open('lisa/_version.py', 'r') as v:
     version = v.read().split('=')[-1].strip()
 
 setup(
-    name = 'lisa',
+    name = 'lisa2',
     description = """Lisa: inferring transcriptional regulators through integrative modeling of public chromatin accessibility and ChIP-seq data\n
 X. Shirley Liu Lab, 2020""",
     version = '2.0.2',
@@ -17,11 +17,11 @@ X. Shirley Liu Lab, 2020""",
     zip_safe = False,
     scripts = ['bin/lisa'],
     install_requires = [
-        'numpy',
-        'scipy',
-        'h5py',
-        'scikit-learn'
+        'numpy>=1.19,<2',
+        'scipy>=2.10.0,<3',
+        'h5py>=2.10.0,<3',
+        'scikit-learn>=0.23.2,<1'
     ],
     include_package_data=True,
-    python_requires='>=3.6',
+    python_requires='>=3.6,<4',
 )
