@@ -13,6 +13,8 @@ LISA predicts which TFs regulate a set of genes using integrative modeling of ch
 
 ## Installation
 
+### Github
+
 LISA is available for install from github. It is recommended to install lisa to a virtual environment:
 
 ```bash
@@ -24,6 +26,15 @@ Install LISA to this virtual env using this command:
 ```bash
 (lisa_env) >>> pip install --upgrade git+git://github.com/AllenWLynch/lisa.git#egg=lisa
 ```
+* LISA will install data into the virutal environment's ```site_packages``` directory, so ensure the env's location can store ~15GB. *
+
+### PyPI
+
+Coming Soon
+
+### Conda
+
+Coming Soon
 
 ## Usage
 
