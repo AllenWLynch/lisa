@@ -13,9 +13,11 @@ LISA predicts which TFs regulate a set of genes using integrative modeling of ch
 
 ## Installation
 
-### Github
+*LISA will install data into the virutal environment's ```site_packages``` directory, so ensure the env's location can store ~15GB.*
 
-LISA is available for install from github. It is recommended to install lisa to a virtual environment:
+### PyPI
+
+It is recommended to install lisa to a virtual environment:
 
 ```bash
 >>> python3 -m venv .venvs/lisa_env
@@ -24,17 +26,29 @@ LISA is available for install from github. It is recommended to install lisa to 
 Install LISA to this virtual env using this command:
 
 ```bash
+(lisa_env) >>> pip install lisa2
+```
+
+Or, if you want the newest version from github (not a sanctioned release):
+
+```bash
 (lisa_env) >>> pip install --upgrade git+git://github.com/AllenWLynch/lisa.git#egg=lisa
 ```
-* LISA will install data into the virutal environment's ```site_packages``` directory, so ensure the env's location can store ~15GB. *
-
-### PyPI
-
-Coming Soon
 
 ### Conda
 
-Coming Soon
+First, create a virtual environment:
+
+```bash
+(base) >>> conda create --name lisa_env
+(base) >>> conda activate lisa_env
+```
+
+Then install from Conda:
+
+```bash
+(lisa_env) >>> conda install -c allenwlynch lisa2
+```
 
 ## Usage
 
@@ -75,15 +89,6 @@ To try out LISA, download a sample gene list from Cistrome.org. This genelist co
 
 ```bash
 (lisa_env) >>> wget http://cistrome.org/~alynch/data/lisa_data/test_genelists/sox2_down.txt
---  http://cistrome.org/~alynch/data/lisa_data/test_genelists/sox2_down.txt
-Resolving cistrome.org (cistrome.org)... 155.52.218.90
-Connecting to cistrome.org (cistrome.org)|155.52.218.90|:80... connected.
-HTTP request sent, awaiting response... 200 OK
-Length: 1030 (1.0K) [text/plain]
-Saving to: ‘sox2_down.txt’
-
-sox2_down.txt                          100%[===========================================================================>]   1.01K  --.-KB/s    in 0s      
-2020-09-04 09:59:08 (75.6 MB/s) - ‘sox2_down.txt’ saved [1030/1030]
 ```
 
 Now, run the "lisa oneshot" command, which will be fastest since it only loads data to memory relevant to one genelist. The first time you run this command, it will download LISA's required data from the Cistrome server, which may take about 15 minutes. Once the data is downloaded, LISA will execute in ~30 seconds.
