@@ -92,9 +92,10 @@ To try out LISA, download a sample gene list from Cistrome.org. This genelist co
 ```
 
 Now, run the "lisa oneshot" command, which will be fastest since it only loads data to memory relevant to one genelist. The first time you run this command, it will download LISA's required data from the Cistrome server, which may take about 15 minutes. Once the data is downloaded, LISA will execute in ~30 seconds.
+**To make this command run much faster, fill the "-c/--cores" parameter, up to 10**
 
 ```bash
-(lisa_env) $ lisa oneshot hg38 sox2_down.txt -c 10 -b 3000 --seed=2556 > results.tsv
+(lisa_env) $ lisa oneshot hg38 sox2_down.txt -b 3000 -c 1 --seed=2556 > results.tsv
 Data not found, must download from CistromeDB ...
 Grabbing hg38 data (~15 minutes):
 	Downloading from database ...
@@ -133,7 +134,7 @@ Formatting output ...
 Done!
 ```
 
-The example above shows common a usage pattern of the "oneshot" command, running with 10 cores, using 3000 genes as a comparitive background, and with a seed supplied so that results are repeatable.  The user must also specify the genes' species of origin, in this case human, hg38. 
+The example above shows common a usage pattern of the "oneshot" command using 3000 genes as a comparitive background and with a seed supplied so that results are repeatable. The user must also specify the genes' species of origin, in this case human, hg38.
 This command prints a table of TFs sorted by regulatory effect on the genes-of-interest, seen here saved to "results.tsv".
 
 ```bash
