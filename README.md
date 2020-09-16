@@ -165,10 +165,10 @@ Now run "lisa multi", pointed at the directory of genelists. You many also provi
 
 ```bash
 (lisa_env) >>> mkdir results
-(lisa_env) >>>lisa multi hg38 test_genelists/*.txt -o results/ -c 10 -b 500 --seed=2556
+(lisa_env) >>> lisa multi hg38 test_genelists/*.txt -o results/ -c 10 -b 500 --seed=2556
 ```
 
-The command above independently processes all genes lists in the "genelists" folder, and saves the results tables to the "results" folder. The top factors influencing each gene list are then summarized to stdout as shown in the table above. 
+The command above independently processes all genes lists in the "genelists" folder, and saves the results tables to the "results" folder. The top factors influencing each gene list are then printed to stdout as a summary table. 
 
 The CLI for "lisa multi" and "lisa one-vs-rest" commands is similar, but the difference is how these commands select background genes to compare with your genes-of-interest. In "lisa multi", background genes are chosen randomly or sampled from different regulatory states (default), but with "lisa one-vs-rest", Each list is compared against all genes in the other lists. This may provide a more robust analysis if each genelist were derived from diffentially-expressed genes in an upstream clustering analysis. 
 
