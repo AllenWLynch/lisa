@@ -20,19 +20,19 @@ LISA predicts which TFs regulate a set of genes using integrative modeling of ch
 It is recommended to install lisa to a virtual environment:
 
 ```bash
->>> python3 -m venv .venvs/lisa_env
->>> source .venvs/lisa_env/bin/activate
+$ python3 -m venv .venvs/lisa_env
+$ source .venvs/lisa_env/bin/activate
 ```
 Install LISA to this virtual env using this command:
 
 ```bash
-(lisa_env) >>> pip install lisa2
+(lisa_env) $ pip install lisa2
 ```
 
 Or, if you want the newest version from github (not a sanctioned release):
 
 ```bash
-(lisa_env) >>> pip install --upgrade git+git://github.com/AllenWLynch/lisa.git#egg=lisa
+(lisa_env) $ pip install --upgrade git+git://github.com/AllenWLynch/lisa.git#egg=lisa
 ```
 
 ### Conda
@@ -40,14 +40,14 @@ Or, if you want the newest version from github (not a sanctioned release):
 First, create a virtual environment:
 
 ```bash
-(base) >>> conda create --name lisa_env
-(base) >>> conda activate lisa_env
+(base) $ conda create --name lisa_env
+(base) $ conda activate lisa_env
 ```
 
 Then install from Conda:
 
 ```bash
-(lisa_env) >>> conda install -c allenwlynch lisa2
+(lisa_env) $ conda install -c allenwlynch lisa2
 ```
 
 ## Usage
@@ -55,7 +55,7 @@ Then install from Conda:
 Installing LISA via pip adds a command to your path:
 
 ```bash
-(lisa_env) >>> lisa 
+(lisa_env) $ lisa 
 Lisa: inferring transcriptional regulators through integrative modeling of
 public chromatin accessibility and ChIP-seq data
 https://genomebiology.biomedcentral.com/articles/10.1186/s13059-020-1934-6 X.
@@ -88,13 +88,13 @@ Lastly, if you are performing cluster-based differential expression analysis, a 
 To try out LISA, download a sample gene list from Cistrome.org. This genelist contains 149 genes that are differentially expressed when the transciption factor Sox2 is knocked out. Let's see if LISA can recover the source the change in expression.
 
 ```bash
-(lisa_env) >>> wget http://cistrome.org/~alynch/data/lisa_data/test_genelists/sox2_down.txt
+(lisa_env) $ wget http://cistrome.org/~alynch/data/lisa_data/test_genelists/sox2_down.txt
 ```
 
 Now, run the "lisa oneshot" command, which will be fastest since it only loads data to memory relevant to one genelist. The first time you run this command, it will download LISA's required data from the Cistrome server, which may take about 15 minutes. Once the data is downloaded, LISA will execute in ~30 seconds.
 
 ```bash
-(lisa_env) >>> lisa oneshot hg38 sox2_down.txt -c 10 -b 3000 --seed=2556 > results.tsv
+(lisa_env) $ lisa oneshot hg38 sox2_down.txt -c 10 -b 3000 --seed=2556 > results.tsv
 Data not found, must download from CistromeDB ...
 Grabbing hg38 data (~15 minutes):
 	Downloading from database ...
@@ -137,7 +137,7 @@ The example above shows common a usage pattern of the "oneshot" command, running
 This command prints a table of TFs sorted by regulatory effect on the genes-of-interest, seen here saved to "results.tsv".
 
 ```bash
-(lisa_env) >>> cat results.tsv | cut -f1,3,7-8 | head -n10
+(lisa_env) $ cat results.tsv | cut -f1,3,7-8 | head -n10
 Rank	factor	combined_p_value	    combined_p_value_adjusted
 1	    NANOG	  0.0	                  0.0
 2	    NANOG	  0.0	                  0.0
@@ -157,15 +157,15 @@ LISA found the effects of SOX2 regulation on this genelist to be statistically s
 To try this command, download a folder of different genelists from Cistrome server, and unpack them. These genelists contain differentially-expressed genes resulting from the knockout and activation of four transcription factors.
 
 ```bash
-(lisa_env) >>> wget http://cistrome.org/~alynch/data/lisa_data/genelists.tar.gz
-(lisa_env) >>> tar -xvf genelists.tar.gz
+(lisa_env) $ wget http://cistrome.org/~alynch/data/lisa_data/genelists.tar.gz
+(lisa_env) $ tar -xvf genelists.tar.gz
 ```
 
 Now run "lisa multi", pointed at the directory of genelists. You many also provide a list of files, but each genelist must have a unique filename, as this filename is used to save the results.
 
 ```bash
-(lisa_env) >>> mkdir results
-(lisa_env) >>> lisa multi hg38 test_genelists/*.txt -o results/ -c 10 -b 500 --seed=2556
+(lisa_env) $ mkdir results
+(lisa_env) $ lisa multi hg38 test_genelists/*.txt -o results/ -c 10 -b 500 --seed=2556
 ```
 
 The command above independently processes all genes lists in the "genelists" folder, and saves the results tables to the "results" folder. The top factors influencing each gene list are then printed to stdout as a summary table. 
