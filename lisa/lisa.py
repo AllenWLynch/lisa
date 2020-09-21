@@ -13,9 +13,10 @@ from collections.abc import Iterable
 import sys
 import json
 import multiprocessing
-from urllib import request
+from urllib import request, error
 import tarfile
 import os
+import sys
 
 #required
 import numpy as np
@@ -183,10 +184,15 @@ class LISA:
             #http://cistrome.org/~alynch/data/genes.tar.gz
             download_dataset = _config.get('downloads','{species}_{version}'.format(species = self.species, version = REQURED_DATASET_VERSION))
 
-            filename, _ = request.urlretrieve(
-                download_dataset, 
-                os.path.join(self.data_path, self.species + '_data.tar.gz')
-            )
+            try:
+                filename, _ = request.urlretrieve(
+                    download_dataset, 
+                    os.path.join(self.data_path, self.species + '_data.tar.gz')
+                )
+            except error.URLError as err:
+                self.log.append('ERROR: Cannot connect to cistrome.org for data!')
+                self.log.append(err)
+                sys.exit()
             
             self.log.append('Extracting data ...')
 
