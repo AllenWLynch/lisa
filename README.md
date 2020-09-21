@@ -32,7 +32,7 @@ Install LISA to this virtual env using this command:
 Or, if you want the newest version from github (not a sanctioned release):
 
 ```bash
-(lisa_env) $ pip install --upgrade git+git://github.com/AllenWLynch/lisa.git#egg=lisa
+(lisa_env) $ pip install git+git://github.com/liulab-dfci/lisa2.git#egg=lisa2
 ```
 
 ### Conda
