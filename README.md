@@ -50,9 +50,69 @@ Then install from Conda:
 (lisa_env) $ conda install -c allenwlynch lisa2
 ```
 
+### Troubleshooting data downloading
+
+Occasionally, a user may not be able to connect to cistrome.org from their institutional server due to some security measure. To circumvent this, one can manually install the data required to run LISA. 
+
+First, on your local machine, download LISA's required data from cistrome.org (this command fetches the human genome (hg38) data for all LISA versions 2.0.x. If you required mouse (mm10) data, substitute the hg38 in the path for mm10).
+
+*local*
+```bash
+$ wget http://http://cistrome.org/~alynch/data/lisa_data/hg38_2.0.tar.gz
+```
+
+Next, on your server, go to the virtual environment in which the LISA package is installed, then enter the python interpretter using the "python" command. Import the "lisa" package, then find the install path (something like ~/miniconda3/envs/lisa_env/python3.8/site_packages/lisa). Copy that path, leaving off the ```__init__.py```:
+
+*server*
+```bash
+(lisa_env) $ python
+>>> import lisa
+>>> lisa2.__file__
+{PATH_TO_LISA}/__init__.py
+>>> exit()
+```
+And, make a new folder under that directory on the server:
+```bash
+$ mkdir {PATH_TO_LISA}/data
+```
+
+Now, transfer the downloaded LISA data from your local machine to the directory you just created on the server:
+
+*local*
+```bash
+$ scp ./hg38_2.0.tar.gz {user}@{server}:/{PATH_TO_LISA}/lisa/data
+```
+
+Once the data is has transferred, the last step is to unpack the data in the server package and delete the tarball:
+
+*server*
+```bash
+(lisa_env) $ cd {PATH_TO_LISA}/data
+(lisa_env) $ tar -xvf hg38_2.0.tar.gz
+(lisa_env) $ ls
+hg38	hg38_2.0.tar.gz
+(lisa_env) $ rm -rf hg38_2.0.tar.gz
+```
+
+The LISA site package folder should now contain a directory called "data" with the structure:
+```
+├── data
+│   ├── hg38
+│   │   ├── ChIP-seq_binding.npz
+│   │   ├── gene_locs.txt
+│   │   ├── genes.tsv
+│   │   ├── lisa_data_hg38_reads_normalized.h5
+│   │   ├── metadata
+│   │   │   ├── lisa_meta.tsv
+│   │   │   └── motifs_meta.tsv
+│   │   ├── Motifs_binding.npz
+│   │   └── RP_map.npz
+│   └── hg38_version.txt
+```
+
 ## Usage
 
-Installing LISA via pip adds a command to your path:
+Installing LISA adds a command to your path:
 
 ```bash
 (lisa_env) $ lisa 
