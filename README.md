@@ -67,7 +67,7 @@ Next, on your server, go to the virtual environment in which the LISA package is
 ```bash
 (lisa_env) $ python
 >>> import lisa
->>> lisa2.__file__
+>>> lisa.__file__
 {PATH_TO_LISA}/__init__.py
 >>> exit()
 ```
@@ -80,7 +80,7 @@ Now, transfer the downloaded LISA data from your local machine to the directory 
 
 *local*
 ```bash
-$ scp ./hg38_2.0.tar.gz {user}@{server}:/{PATH_TO_LISA}/lisa/data
+$ scp ./hg38_2.0.tar.gz {user}@{server}:/{PATH_TO_LISA}/data
 ```
 
 Once the data is has transferred, the last step is to unpack the data in the server package and delete the tarball:
