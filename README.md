@@ -61,7 +61,7 @@ First, on your local machine, download LISA's required data from cistrome.org (t
 $ wget http://http://cistrome.org/~alynch/data/lisa_data/hg38_2.0.tar.gz
 ```
 
-Next, on your server, go to the virtual environment in which the LISA package is installed, then enter the python interpretter using the "python" command. Import the "lisa" package, then find the install path (something like ~/miniconda3/envs/lisa_env/python3.8/site_packages/lisa). Copy that path, leaving off the ```__init__.py```:
+Next, on your server, go to the virtual environment in which the LISA package is installed, then enter the python interpretter using the "python" command. Import the ```lisa``` package, then find the install path (something like ~/miniconda3/envs/lisa_env/python3.8/site_packages/lisa). Copy that path, leaving off the ```__init__.py```:
 
 *server*
 ```bash
@@ -94,7 +94,7 @@ hg38	hg38_2.0.tar.gz
 (lisa_env) $ rm -rf hg38_2.0.tar.gz
 ```
 
-The LISA site package folder should now contain a directory called "data" with the structure:
+The LISA site package folder should now contain a directory called ```data``` with the structure:
 ```
 ├── data
 │   ├── hg38
@@ -195,7 +195,7 @@ Done!
 ```
 
 The example above shows common a usage pattern of the "oneshot" command using 3000 genes as a comparitive background and with a seed supplied so that results are repeatable. The user must also specify the genes' species of origin, in this case human, hg38.
-This command prints a table of TFs sorted by regulatory effect on the genes-of-interest, seen here saved to "results.tsv".
+This command prints a table of TFs sorted by regulatory effect on the genes-of-interest, seen here saved to ```results.tsv```.
 
 ```bash
 (lisa_env) $ cat results.tsv | cut -f1,3,7-8 | head -n10
@@ -222,7 +222,7 @@ To try this command, download a folder of different genelists from Cistrome serv
 (lisa_env) $ tar -xvf genelists.tar.gz
 ```
 
-Now run "lisa multi", pointed at the directory of genelists. You many also provide a list of files, but each genelist must have a unique filename, as this filename is used to save the results.
+Now run ```lisa multi```, pointed at the directory of genelists. You many also provide a list of files, but each genelist must have a unique filename, as this filename is used to save the results.
 
 ```bash
 (lisa_env) $ mkdir results
@@ -231,7 +231,7 @@ Now run "lisa multi", pointed at the directory of genelists. You many also provi
 
 The command above independently processes all genes lists in the "genelists" folder, and saves the results tables to the "results" folder. The top factors influencing each gene list are then printed to stdout as a summary table. 
 
-The CLI for "lisa multi" and "lisa one-vs-rest" commands is similar, but the difference is how these commands select background genes to compare with your genes-of-interest. In "lisa multi", background genes are chosen randomly or sampled from different regulatory states (default), but with "lisa one-vs-rest", Each list is compared against all genes in the other lists. This may provide a more robust analysis if each genelist were derived from diffentially-expressed genes in an upstream clustering analysis. 
+The CLI for ```lisa multi``` and ```lisa one-vs-rest``` commands is similar, but the difference is how these commands select background genes to compare with your genes-of-interest. In "lisa multi", background genes are chosen randomly or sampled from different regulatory states (default), but with ```lisa one-vs-rest``` Each list is compared against all genes in the other lists. This may provide a more robust analysis if each genelist were derived from diffentially-expressed genes in an upstream clustering analysis. 
 
 ## Python Module
 
