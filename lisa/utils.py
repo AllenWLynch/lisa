@@ -149,9 +149,11 @@ class LISA_Results:
             self.results_rows[row] for row in rows
         ]))
 
-    def to_tsv(self, top_n = 200):
-
-        output_lines = self.subset(range(top_n))
+    def to_tsv(self, top_n = None):
+        if not top_n is None:
+            output_lines = self.subset(range(top_n))
+        else:
+            output_lines = self
         return '\n'.join([
             '\t'.join([str(value) for value in line])
             for line in [output_lines.results_headers, *output_lines.results_rows]

@@ -21,7 +21,7 @@ import sys
 #required
 import numpy as np
 import h5py as h5
-from scipy import sparse
+from scipy import sparse, stats
 
 PACKAGE_PATH = os.path.dirname(__file__)
 CONFIG_PATH = os.path.join(PACKAGE_PATH, 'config.ini')
@@ -263,6 +263,10 @@ class LISA:
         test_statistic = np.sum(weights * np.tan((0.5-p_vals) * np.pi), axis = 1)
         combined_p_value = 0.5 - np.arctan(test_statistic)/np.pi
 
+        for i, (combined, uncombined) in enumerate(zip(combined_p_value, p_vals)):
+            if combined == 0:
+                combined_p_value[i] = stats.combine_pvalues(uncombined)[1] #if cauchy combination p-value is asymtotically small, replace with fisher combination test p-value
+
         return combined_p_value
 
     @staticmethod
@@ -358,7 +362,7 @@ class LISA:
             **assay_pvals
         )
 
-        results = results.sortby('combined_p_value_adjusted', add_rank = True)
+        results = results.sortby('combined_p_value', add_rank = True)
         
         self.log.append('Done!')
         
