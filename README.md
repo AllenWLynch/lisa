@@ -253,6 +253,16 @@ results_df = pd.DataFrame(results.todict())
 
 The LISA module is implemented in the style of an sklearn estimator. First, the user instantiates a LISA model object, then uses that object to predict TFs from any number of genelists. "lisa.predict" returns a ```results``` object with handy data manipulation methods such as  ```sortby``` and ```subset```. Converting from the results object to a Pandas dataframe for analysis is shown above. Note that pandas is not required to use LISA.
 
+## Changelog
+
+### [2.0.6] - 2020-11-22
+
+#### Added
+
+* Support for Lisa version 1 API for integration with LISA website
+* Bugfixes in motif mode results
+* Slight speedups in parallelization of insilico-delition computing
+
 ## Support
 
 If you have questions, requests, or issues, please email alynch@ds.dfci.harvard.edu.
