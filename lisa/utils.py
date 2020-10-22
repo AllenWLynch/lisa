@@ -90,12 +90,27 @@ class LISA_Results:
         except IndexError:
             raise IndexError('Column {} not in results table'.format(str(colname)))
 
-    def sortby(self, key, add_rank = False):
+    def get_column(self, colnames):
+
+        column_oriented = self._transpose_table(self.results_rows)
+
+        if type(colnames) == str:
+            colnames = [colnames]
+        
+        returns = []
+        for colname in colnames:
+            colnum = self.get_colnum(colname)
+            returns.append(column_oriented[colnum])
+
+        return returns
+
+
+    def sortby(self, key, add_rank = False, reverse = False):
 
         if isinstance(key, str):
             key = self.get_colnum(key)
 
-        self.results_rows = sorted(self.results_rows, key = lambda col : col[key])
+        self.results_rows = sorted(self.results_rows, key = lambda col : col[key], reverse=reverse)
 
         if add_rank:
             row_ranks = range(1, len(self) + 1)

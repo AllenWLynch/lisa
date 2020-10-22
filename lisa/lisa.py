@@ -253,21 +253,22 @@ class LISA:
         assert(len(p_vals.shape) == 2 ), 'P-values must be provided as matrix of (samples, multiple p-values)'
         assert(p_vals.shape[1] > 1), 'Must have multiple p-values to combine'
 
-        #clip p-values at minimum float64 value to prevent underflow
-        p_vals = np.clip(p_vals, np.nextafter(0, 1, dtype = np.float64), 1.0)
         if weights is None:
-            weights = np.ones((1, p_vals.shape[1])) / p_vals.shape[1]
+            weights = 1 / p_vals.shape[1]
         else:
             assert(p_vals.shape[1] == weights.shape[1])
 
-        test_statistic = np.sum(weights * np.tan((0.5-p_vals) * np.pi), axis = 1)
-        combined_p_value = 0.5 - np.arctan(test_statistic)/np.pi
+        individual_statistics = np.where(p_vals > 1e-15, np.tan((0.5-p_vals) * np.pi), 1/p_vals/np.pi)
+        test_statistic = np.sum(weights * individual_statistics, axis = 1)
+        
+        # lim x->inf of arctan(x) = pi/2
+        # so for large x, arctan(x) ~ pi/2 - 1/x, as 1/x -> 0
+        # substitute this arctan approx when x > 1e15
 
-        for i, (combined, uncombined) in enumerate(zip(combined_p_value, p_vals)):
-            if combined == 0:
-                combined_p_value[i] = stats.combine_pvalues(uncombined)[1] #if cauchy combination p-value is asymtotically small, replace with fisher combination test p-value
+        too_large = test_statistic > 1e15
+        combined_p_value = np.where(~too_large, 0.5 - np.arctan(test_statistic)/np.pi, 1/test_statistic/np.pi)
 
-        return combined_p_value
+        return test_statistic, combined_p_value
 
     @staticmethod
     def create_label_dictionary(query_list, background_list):
@@ -307,14 +308,6 @@ class LISA:
         return background_genes
 
 
-    def _match_background_list(self, query_genes, background_list):
-
-        background_matches = self.all_genes.match_user_provided_genes(background_list)
-        background_genes = background_matches.get_distinct_genes_by_symbol(excluding = query_genes.get_symbols())
-        assert( len(background_genes) > len(query_genes) )
-
-        return background_genes
-             
     def _get_query_and_background_genes(self, query_list, *, background_list = [], num_background_genes = 3000, background_strategy =
         'regulatory', seed = None):
 
@@ -327,7 +320,10 @@ class LISA:
             .format(str(self.max_query_genes), str(len(query_genes)))
 
         if background_strategy == 'provided':
-            background_genes = self._match_background_list(background_list)
+            
+            background_matches = self.all_genes.match_user_provided_genes(background_list)
+            background_genes = background_matches.get_distinct_genes_by_symbol(excluding = query_genes.get_symbols())
+            assert( len(background_genes) > len(query_genes) )
         
         else:
             background_genes = self._sample_background_genes(query_genes, background_strategy = background_strategy, 
@@ -352,17 +348,17 @@ class LISA:
         return gene_mask, label_vector, gene_info_dict
 
 
-    def _format_results(self, *, combined_p_values, assay_pvals, assay_info, gene_info_dict):
+    def _format_results(self, *, combined_test_statistic, combined_p_values, assay_pvals, assay_info, gene_info_dict):
         self.log.append('Formatting output ...')
         #instantiate a lisa results object
         results = LISA_Results.fromdict(
             **self.assays[0].get_metadata(),
+            combined_test_statistic = combined_test_statistic,
             combined_p_value = combined_p_values,
-            combined_p_value_adjusted = list(np.minimum(np.array(combined_p_values) * len(combined_p_values), 1.0)),
             **assay_pvals
         )
 
-        results = results.sortby('combined_p_value', add_rank = True)
+        results = results.sortby('combined_test_statistic', add_rank = True, reverse = True)
         
         self.log.append('Done!')
         
@@ -434,7 +430,7 @@ class LISA:
 
             aggregate_pvals = np.array(list(assay_pvals.values())).T
             
-            combined_p_values = self._combine_tests(aggregate_pvals)
+            combined_statistic, combined_p_values = self._combine_tests(aggregate_pvals)
 
-        return self._format_results(combined_p_values = combined_p_values, assay_pvals = assay_pvals, assay_info = assay_info,
-            gene_info_dict = gene_info_dict) 
+        return self._format_results(combined_test_statistic = combined_statistic, combined_p_values = combined_p_values, assay_pvals = assay_pvals, assay_info = assay_info,
+            gene_info_dict = gene_info_dict)

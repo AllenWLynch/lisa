@@ -34,7 +34,7 @@ def mannu_test_function(x):
 class LISA_RP_Assay:
 
     invitro_metadata = ['factor','cell_line','cell_type','tissue']
-    insilico_metadata = ['factor','dbd','description','cell_line']
+    insilico_metadata = ['factor','edition','source','sourcefile','status','numseqs','pmid']
 
     def __init__(self, *, technology, config, cores, log, metadata_headers, metadata_path, oneshot):
         self.config = config
@@ -207,7 +207,7 @@ class Accesibility_Assay(LISA_RP_Assay):
         self.log.append('Performing in-silico knockouts ...')
 
         with Pool(self.cores) as p:
-            knockouts = p.map(delta_RP_wrapper, iter(KnockoutGenerator(accessibility_profiles, factor_binding, rp_map)))
+            knockouts = list(p.imap(delta_RP_wrapper, iter(KnockoutGenerator(accessibility_profiles, factor_binding, rp_map))))
         
         #concatenate datasets to for gene x TF x datasets shaped matrix
         self.log.append('Calculating Δ regulatory score ...')
