@@ -198,20 +198,20 @@ The example above shows common a usage pattern of the "oneshot" command using 30
 This command prints a table of TFs sorted by regulatory effect on the genes-of-interest, seen here saved to ```results.tsv```.
 
 ```bash
-(lisa_env) $ cat results.tsv | cut -f1,3,7-8 | head -n10
-Rank	factor	combined_p_value	    combined_p_value_adjusted
-1	    NANOG	  0.0	                  0.0
-2	    NANOG	  0.0	                  0.0
-3	    NANOG	  5.551115123125783e-17	3.836930773104541e-13
-4	    NANOG	  5.551115123125783e-17	3.836930773104541e-13
-5	    NANOG	  5.551115123125783e-17	3.836930773104541e-13
-6	    SOX2	  5.773159728050814e-15	3.9904080040287226e-11
-7	    SMAD3	  9.325873406851315e-15	6.446043698815629e-11
-8	    NANOG	  9.126033262418787e-14	6.307914190983865e-10
-9	    SMAD3	  9.614531393253856e-14	6.645564099017065e-10
+(lisa_env) $ cat results.tsv | cut -f1,3,8 | head -n10
+Rank	factor	combined_p_value
+1	NANOG	2.3211382347622477e-21
+2	NANOG	5.591419465719548e-20
+3	NANOG	2.6179628478261444e-17
+4	NANOG	4.6683275052921544e-17
+5	NANOG	4.951497441623821e-17
+6	SOX2	5.773159728050814e-15
+7	SMAD3	9.325873406851315e-15
+8	NANOG	9.126033262418787e-14
+9	SMAD3	9.614531393253856e-14
 ```
 
-LISA found the effects of SOX2 regulation on this genelist to be statistically significant (p = 3.9904080040287226e-11 << 0.01)! The other TF found to regulate this genelist, NANOG, functions in concert with SOX2 to establish cell identity, so this is a strong prediction as well.  
+LISA found the effects of SOX2 regulation on this genelist to be highly-ranked! The other TF found to regulate this genelist, NANOG, functions in concert with SOX2 to establish cell identity, so this is a strong prediction as well.  
 
 ### multi and one-vs-rest usage:
 
