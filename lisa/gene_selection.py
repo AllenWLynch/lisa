@@ -178,7 +178,6 @@ class GeneSet:
             gene for location_key, gene in self.genes_by_chr.items() if location_key.split(':')[0] == chromosome
         ]
 
-
     def __len__(self):
         return len(self.genes_by_chr)
 

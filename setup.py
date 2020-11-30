@@ -9,7 +9,7 @@ setup(
     name = 'lisa2',
     description = """Lisa: inferring transcriptional regulators through integrative modeling of public chromatin accessibility and ChIP-seq data\n
 X. Shirley Liu Lab, 2020""",
-    version = '2.0.6',
+    version = '2.1.0',
     url = 'https://genomebiology.biomedcentral.com/articles/10.1186/s13059-020-1934-6',
     author = 'Allen Lynch',
     author_email = 'alynch@ds.dfci.harvard.edu',

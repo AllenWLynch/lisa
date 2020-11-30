@@ -22,7 +22,6 @@ from sklearn.exceptions import ConvergenceWarning
 import warnings
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
 
-
 class EstimatorInterface(BaseEstimator):
     #Wraps the sklearn Estimator class, and enforces that the user implement a "fit" and "get_info" method
     def fit(self):
@@ -93,7 +92,7 @@ class LR_BinarySearch_SampleSelectionModel(SampleSelectionModel):
         # Normalize with mean centering and log transformation
         index_array = np.arange(rp_matrix.shape[1])
 
-        X = StandardScaler(with_std = False).fit_transform( np.log2(rp_matrix + 1) )
+        X = StandardScaler(with_std = True).fit_transform( np.log2(rp_matrix + 1) )
 
         #narrow features with anova selection
         anova_featues = SelectKBest(f_classif, k=self.num_anova_features).fit(X, labels).get_support()
@@ -131,9 +130,7 @@ class ChromatinModel(EstimatorInterface):
 
 
 class LR_ChromatinModel(ChromatinModel):
-    """
-    Wrapper for the DeltaLR model defined above. Fits the best LR classifier using grid search
-    """
+
     def __init__(self, param_grid, kfold_cv = 4, scoring = 'roc_auc', penalty = 'l1'):
         self.kfold_cv = kfold_cv
         self.param_grid = param_grid
@@ -144,7 +141,7 @@ class LR_ChromatinModel(ChromatinModel):
 
         self.rp_0 = rp_matrix
 
-        self.normalizer = StandardScaler(with_std = False)
+        self.normalizer = StandardScaler(with_std = True)
 
         X0 = self.normalizer.fit_transform( np.log2(self.rp_0 + 1)  )
 
@@ -176,4 +173,39 @@ class LR_ChromatinModel(ChromatinModel):
             coefs = list(np.squeeze(self.model.coef_)),
             auc_score = self.grid_search.best_score_
         )
+
+class FakeModel():
+    def __init__(self, n):
+        self.coef_ = np.ones(n)
+        self.intercept_ = 0
     
+class UnweightedChromatinModel(ChromatinModel):
+
+    def __init__(self):
+        pass
+
+    def fit(self, rp_matrix, labels):
+
+        self.rp_0 = rp_matrix
+
+        self.normalizer = StandardScaler(with_std = False)
+
+        X0 = self.normalizer.fit_transform( np.log2(self.rp_0 + 1)  )
+
+        self.model = FakeModel(rp_matrix.shape[1])
+
+        return self
+
+    def get_deltaRP_activation(self, rp_knockout):
+        """
+        rp_knockout: is a datacube of shape (genes, samples, TFs),
+        this method must implement a transformation into a genes x TFs matrix, sumarrizing the dataset-axis effects
+        """
+        #subtract define deltaX to be the log2 of the fraction of knocked-out RP
+        deltaX = np.log2(self.rp_0[:,:,np.newaxis] - rp_knockout + 1) - np.log2(self.rp_0[:,:,np.newaxis] + 1)
+        
+        #flip sign so that more knockout = more deltaR
+        return -1 * deltaX.transpose(0,2,1).dot(self.model.coef_.reshape(-1))
+
+    def get_info(self):
+        return dict()

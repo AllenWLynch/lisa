@@ -73,8 +73,38 @@ class Log:
                 file = self.target)
 
 
-class LISA_Results:
+class Metadata:
+    '''
+    key-indexed tabular format based on dictionary
+    '''
+    def __init__(self, metadata_path, print_headers):
+        self.metadata = self.load_metadata(metadata_path)
+        self.metadata_headers = print_headers
 
+    @staticmethod
+    def load_metadata(metadata_path):
+        #reformat metadata tsv into conventiant id-indexed dictionary
+        with open(metadata_path, 'r', encoding = 'latin') as metdata_file:
+            metadata = [[field.strip() for field in line.split('\t')] for line in metdata_file.readlines()]
+                                
+        meta_headers, metadata = metadata[0], metadata[1:]
+
+        return {metaline[0] : dict(zip(meta_headers[1:], metaline[1:])) for metaline in metadata}
+
+    def select(self, sample_ids):
+        return dict(
+            sample_id = sample_ids,
+            **{
+                header : [self.metadata[_id][header] for _id in sample_ids]
+                for header in self.metadata_headers 
+            }
+        )
+
+
+class LISA_Results:
+    '''
+    Column-indexed tabular format for storing rows of data
+    '''
     @classmethod
     def fromdict(cls, **kwargs):
         d = kwargs

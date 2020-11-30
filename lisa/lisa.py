@@ -2,7 +2,7 @@
 #lisa modules
 import lisa.gene_selection as gene_selection
 import lisa.assays as assays
-from lisa.utils import LoadingBar, Log, LISA_Results
+from lisa.utils import LoadingBar, Log, LISA_Results, Metadata
 from lisa.models import LR_BinarySearch_SampleSelectionModel
 from lisa.models import LR_ChromatinModel
 from lisa._version import __version__
@@ -22,6 +22,7 @@ import sys
 import numpy as np
 import h5py as h5
 from scipy import sparse, stats
+#from pyranges.pyranges import PyRange
 
 PACKAGE_PATH = os.path.dirname(__file__)
 CONFIG_PATH = os.path.join(PACKAGE_PATH, 'config.ini')
@@ -33,7 +34,7 @@ _config.read(CONFIG_PATH)
 class DownloadRequiredError(BaseException):
     pass
 
-class LISA:
+class LISA_Core:
     '''
     The LISA object is the user's interface with the LISA algorithm. It holds the parameters specified by the user and 
     handles data loading from hdf5
@@ -52,6 +53,7 @@ class LISA:
         verbose = True,
         oneshot = False,
         log = None,
+        rp_map = 'basic'
     ):
         #all paramter checking is done on LISA instantiation to ensure consistency between python module and cmd line usage
         self.isd_options = _config.get('lisa_params', 'isd_methods').split(',')
@@ -98,6 +100,17 @@ class LISA:
 
         self.used_oneshot = False
 
+        if isinstance(rp_map, str):
+            rp_map_styles = _config.get('lisa_params','rp_map_styles').split(',')
+            assert(rp_map in rp_map_styles), 'RP map must be numpy/scipy.sparse array, or be one of provided maps: {}'.format(','.join(rp_map_styles))
+        else:
+            assert( isinstance(rp_map, numpy.ndarry) or isinstance(rp_map, scipy.sparse)), 'RP map must be either numpy ndarry or scipy.sparse matrix'
+        self.rp_map = rp_map
+
+        if self.num_datasets_selected % self.cores != 0:
+            self.log.append('''WARNING: You\'ve allocated {} cores with {} datasets selected.
+To ensure maximum speed, allocate as many cores as datasets selected.
+For better efficiency, make #datasets a multiple of #cores.'''.format(self.cores, self.num_datasets_selected))
 
     def _set_cores(self, cores):
         assert( isinstance(cores, int) and cores >= -1)
@@ -109,9 +122,7 @@ class LISA:
         #this prevents LISA from using more resources than required.
         self.cores = min(cores, max_cores, self.num_datasets_selected)
 
-    def _preprocess_gene_list(self, genes):
-        #make sure gene lists are composed of stripped strings
-        return [str(gene).strip() for gene in genes if len(gene) > 0]
+    #____ DATA LOADING FUNCTIONS _____
 
     def _load_gene_info(self):
 
@@ -123,19 +134,19 @@ class LISA:
         with open(_config.get('genes','gene_locs').format(package_path = PACKAGE_PATH, species = self.species), 'r') as f:
             rp_map_locs = np.array([line.strip() for line in f.readlines()])
 
-        return all_genes, rp_map_locs
+        self.all_genes, self.rp_map_locs = all_genes, rp_map_locs
         
-
     def _load_factor_binding_data(self, data_object):
 
         self.factor_dataset_ids = list(data_object[_config.get('accessibility_assay','reg_potential_dataset_ids')\
             .format(technology = self.isd_method)][...].astype(str))
         
-        return sparse.load_npz(_config.get('factor_binding','matrix').format(package_path = PACKAGE_PATH, species = self.species, technology = self.isd_method))
+        self.factor_binding = sparse.load_npz(_config.get('factor_binding','matrix').format(package_path = PACKAGE_PATH, species = self.species, technology = self.isd_method))
 
-    def _load_rp_map(self, data_object):
-
-        return sparse.load_npz(_config.get('RP_map','matrix').format(package_path = PACKAGE_PATH, species = self.species)).tocsr()
+    def _load_rp_map(self):
+        if isinstance(self.rp_map, str):
+            self.rp_map = sparse.load_npz(_config.get('RP_map','matrix').format(package_path = PACKAGE_PATH, species = self.species, style = self.rp_map)).tocsr()
+        return self.rp_map
 
     def _load_data(self):
 
@@ -144,106 +155,218 @@ class LISA:
 
         with self.log.section('Loading data into memory (only on first prediction):') as log:
 
-            self.all_genes, self.rp_map_locs = self._load_gene_info()
+            self._load_gene_info()
+
+            log.append('Loading regulatory potential map ...')
+            self._load_rp_map()
 
             with h5.File(self.data_source, 'r') as data:
 
                 with log.section('Loading binding data ...') as log:
-                    self.factor_binding = self._load_factor_binding_data(data)
-
-                log.append('Loading regulatory potential map ...')
-                self.rp_map = self._load_rp_map(data)
+                    self._load_factor_binding_data(data)
 
             self.log.append('Done!')
 
         self._is_loaded = True
 
-    
+    def link_metadata(self, technology):
+        return Metadata(_config.get('metadata', technology).format(package_path = PACKAGE_PATH, species = self.species, technology = technology),
+                    _config.get('metadata',technology+'_headers').split(','))
+
+    #____ DATA DOWNLOADING FUNCTIONS ____
+
     def _check_for_data(self):
         if not (os.path.isdir(self.data_path) and os.path.isdir(os.path.join(self.data_path, self.species))):
             self.log.append('Data not found, must download from CistromeDB ...')
             raise DownloadRequiredError()
 
         else:
-            with open(_config.get('paths','dataset_version').format(package_path = PACKAGE_PATH, species = self.species), 'r') as v:
-                dataset_version = v.read().strip()
+            try:
+                with open(_config.get('paths','dataset_version').format(package_path = PACKAGE_PATH, species = self.species), 'r') as v:
+                    dataset_version = v.read().strip()
 
-            if not REQURED_DATASET_VERSION == dataset_version:
-                self.log.append('Dataset version mismatch, must download new dataset from CistromeDB ...')
+                if not REQURED_DATASET_VERSION == dataset_version:
+                    self.log.append('Dataset version mismatch, must download new dataset from CistromeDB ...')
+                    raise DownloadRequiredError()
 
+            except FileNotFoundError:
+                raise DownloadRequiredError()
 
-    def _download_data(self):
+    
+    @staticmethod
+    def extract_tar(tarball, write_name, rm = False):
+        with tarfile.open(tarball) as tar:
+            tar.extractall(path = write_name)
+        if rm:
+            os.remove(tarball)
+
+    def fetch_from_cistrome(self, url, write_name, is_tar = True):
+
+        write_path = os.path.dirname(write_name)
+
+        if not os.path.isdir(write_path):
+                os.mkdir(write_path)
+
+        try:
+            filename, _ = request.urlretrieve(url)
+        except error.URLError as err:
+            self.log.append('ERROR: Cannot connect to cistrome.org for data (usually due to security settings on some servers)!\nView github pages for manual dataset install instructions.')
+            self.log.append(err)
+            sys.exit()
+
+        if is_tar:
+            self.log.append('Extracting data ...')
+            self.extract_tar(filename, write_name, rm = True)
+        else:
+            os.rename(filename, write_name)
+        
+        return True
+
+    def download_data(self):
 
         with self.log.section('Grabbing {} data (~15 minutes):'.format(self.species)):
             
             self.log.append('Downloading from database ...')
-            #make data directory if does not exist
-            if not os.path.isdir(self.data_path):
-                os.mkdir(self.data_path)
+                        
+            dataset_url = _config.get('downloads','dataset').format(species = self.species, version = REQURED_DATASET_VERSION))
+
+            self.fetch_from_cistrome(dataset_url, self.data_path, is_tar=True)
+
+    #____ GENE SELECTION FUNCTIONS ____
+    def _preprocess_gene_list(self, genes):
+        #make sure gene lists are composed of stripped strings
+        return [str(gene).strip() for gene in genes if len(gene) > 0]
+        
+    def _sample_background_genes(self, query_genes, background_strategy = 'regulatory', num_background_genes = 3000, seed = None):
+
+        assert( num_background_genes >= len(query_genes) and len(query_genes) <= 19000//2 ), "More query genes selected than background genes"
+
+        background_candidates = self.all_genes.get_distinct_genes_by_symbol(excluding = query_genes.get_symbols())
+
+        assert(len(background_candidates) >= num_background_genes), 'Number of background candidates must be greater than or equal number of genes to select as background.'
+        #if no down-sampling is needed:
+        if len(background_candidates) == num_background_genes:
+            background_genes = background_candidates
+
+        if background_strategy == 'regulatory':
+
+            background_genes = background_candidates.sample_by_TAD(num_background_genes, seed = seed)
+
+            if len(background_genes) > num_background_genes:
+                background_genes = background_genes.random_sample(num_background_genes, seed = seed)
+
+        elif background_strategy == 'random':
+            background_genes = background_candidates.random_sample(num_background_genes, seed = seed)
+        else:
+            raise AssertionError('Background selection strategy {} not supported'.format(background_strategy))
+
+        return background_genes
+
+    def _get_query_and_background_genes(self, query_list, *, background_list = [], num_background_genes = 3000, background_strategy =
+        'regulatory', seed = None):
+
+        query_list = self._preprocess_gene_list(query_list)
+        background_list = self._preprocess_gene_list(background_list)
+
+        query_genes = self.all_genes.match_user_provided_genes(query_list)
+
+        assert(20 <= len(query_genes) <= self.max_query_genes), 'User must provide list of 20 to {} unique genes. Provided {}'\
+            .format(str(self.max_query_genes), str(len(query_genes)))
+
+        if background_strategy == 'provided':
             
-            #http://cistrome.org/~alynch/data/genes.tar.gz
-            download_dataset = _config.get('downloads','{species}_{version}'.format(species = self.species, version = REQURED_DATASET_VERSION))
+            background_matches = self.all_genes.match_user_provided_genes(background_list)
+            background_genes = background_matches.get_distinct_genes_by_symbol(excluding = query_genes.get_symbols())
+            assert( len(background_genes) > len(query_genes) ), 'Number of background genes must exceed number of query genes provided'
+        
+        else:
+            background_genes = self._sample_background_genes(query_genes, background_strategy = background_strategy, 
+                num_background_genes = num_background_genes, seed = seed)
 
-            try:
-                filename, _ = request.urlretrieve(
-                    download_dataset, 
-                    os.path.join(self.data_path, self.species + '_data.tar.gz')
-                )
-            except error.URLError as err:
-                self.log.append('ERROR: Cannot connect to cistrome.org for data!')
-                self.log.append(err)
-                sys.exit()
+        return query_genes, background_genes
+
+    @staticmethod
+    def create_label_dictionary(query_list, background_list):
+        return { #this dict is used to create label vector for LISA algo
+            gene.get_location() : int(i < len(query_list))
+            for i, gene in enumerate(list(query_list) + list(background_list))
+        }, dict( #return this dict for results (purely informational)
+            query_symbols = query_list.get_symbols(),
+            background_symbols = background_list.get_symbols(),
+            query_locations = query_list.get_locations(),
+            background_locations = background_list.get_locations(),
+        )
+
+    def _make_gene_mask(self, query_genes, background_genes):
+
+        label_dict, gene_info_dict = self.create_label_dictionary(query_genes, background_genes)
+
+        #Show user number of query and background genes selected
+        self.log.append('Selected {} query genes and {} background genes.'\
+            .format(str(len(gene_info_dict['query_symbols'])), str(len(gene_info_dict['background_symbols']))))
+
+        #subset the rp map for those genes and make label vector
+        gene_mask = np.isin(self.rp_map_locs, list(label_dict.keys()))
+        #make label vector from label_dict based of gene_loc ordering in rp_map data
+        label_vector = np.array([label_dict[gene_loc] for gene_loc in self.rp_map_locs[gene_mask]])
+        
+        return gene_mask, label_vector, gene_info_dict
+
+    #KEYSTONE FUNCTION FOR GENE SELECTION
+    def _choose_genes(self, query_list, background_list = [], background_strategy = 'regulatory', num_background_genes = 3000, seed = None):
+        #validate user args
+        if background_list is None:
+            background_list = []
+        assert( isinstance(num_background_genes, int) )
+        assert( background_strategy in  self.background_options ), 'Background strategy must be in \{{}\}'.format(', '.join(self.background_options))
+        assert( isinstance(query_list, Iterable) )
+        assert( isinstance(background_list, Iterable))
+        #check to make sure data is downloaded
+
+        with self.log.section('Matching genes and selecting background ...'):
+
+            if len(background_list) > 0 and background_strategy == 'provided':
+                self.log.append('User provided background genes!')
+
+            query_genes, background_genes = self._get_query_and_background_genes(query_list, background_list = background_list, 
+                    num_background_genes = num_background_genes, background_strategy = background_strategy, seed = seed)
             
-            self.log.append('Extracting data ...')
+            gene_mask, label_vector, gene_info_dict = self._make_gene_mask(query_genes, background_genes)
 
-            with tarfile.open(filename) as tar:
-                tar.extractall(path = self.data_path)
+        return gene_mask, label_vector, gene_info_dict
 
-            os.remove(filename)
-
-            with open(_config.get('paths','dataset_version').format(package_path = PACKAGE_PATH, species = self.species), 'w') as v:
-                v.write(REQURED_DATASET_VERSION)
-
-            self.log.append('Done!\n')
-
+    #____ ASSAY INSTANTIATION AND CALLING
     def add_assay(self, assay):
         self.assays.append(assay)
 
+    def _run_assays(self, gene_mask, label_vector):
+
+        with h5.File(self.data_source, 'r') as data:
+            #run each assay specified in the _load_data step. Each assay returns a p_value for each factor binding sample, and returns metadata
+            #each assay takes the same arguments and makes the same returns but can perform different tests
+            assay_pvals, assay_info = {},{}
+            for assay in self.assays:
+                assay_pvals[assay.technology + '_p_value'] = assay.predict(gene_mask, label_vector, data)
+                assay_info[assay.technology + '_model_info'] = assay.get_info()
+
+        return assay_pvals, assay_info
+
     def _initialize_assays(self):
-        #Add assays to LISA's steps. Each assay follows the same instantiation and prediction calling, making them modular and substitutable.
-        #Adding an assay loads the required data for that assay
+        raise NotImplementedError('_initialize_assays function is not implemented on base LISA object') 
 
-        #The first assay to be loaded must be the ChIP-seq or Motif direct knockout, because this assay supplies the 
-        #metadata for the final output table since it holds information on all factor binding samples
-        assay_kwargs = dict(config = _config, cores = self.cores, log = self.log, oneshot = self.oneshot)
+    def _initialize_resources(self):
+        try:
+            self._check_for_data()
+        except DownloadRequiredError:
+            self._download_data()
+            self._check_for_data()
 
-        self.add_assay(
-            assays.PeakRP_Assay(
-                technology = self.isd_method, **assay_kwargs,
-                metadata_headers = assays.LISA_RP_Assay.invitro_metadata if self.isd_method == 'ChIP-seq' else assays.LISA_RP_Assay.insilico_metadata, 
-                metadata_path = _config.get('metadata',self.isd_method).format(package_path = PACKAGE_PATH, species = self.species, technology =self.isd_method),
-            )
-        )
+        self.log.append('Using {} cores ...'.format(str(self.cores)))
 
-        self.add_assay(
-            assays.Accesibility_Assay(technology = 'DNase', **assay_kwargs,
-                metadata_path = _config.get('metadata','DNase').format(package_path = PACKAGE_PATH, species = self.species, technology = 'DNase'),
-                rp_map = self.rp_map, factor_binding = self.factor_binding,
-                selection_model = LR_BinarySearch_SampleSelectionModel(self.num_datasets_selected_anova, self.num_datasets_selected),
-                chromatin_model = LR_ChromatinModel({'C' : list(10.0**np.arange(-2,4.1,0.5))}, penalty = 'l2')
-            )
-        )
+        if not self._is_loaded:
+            self._load_data()
 
-        self.add_assay(
-            assays.Accesibility_Assay(technology = 'H3K27ac', **assay_kwargs,
-                metadata_path = _config.get('metadata', 'H3K27ac').format(package_path = PACKAGE_PATH, species = self.species, technology = 'H3K27ac'),
-                rp_map = self.rp_map, factor_binding = self.factor_binding,
-                selection_model = LR_BinarySearch_SampleSelectionModel(self.num_datasets_selected_anova, self.num_datasets_selected),
-                chromatin_model = LR_ChromatinModel({'C' : list(10.0**np.arange(-2,4.1,0.5))}, penalty = 'l2')
-            )
-        )
-
-
+    #___ RESULTS SUMMARIZATION AND FORMATTING____
     @staticmethod
     def _combine_tests(p_vals, weights=None):
         #https://arxiv.org/abs/1808.09011
@@ -270,95 +393,16 @@ class LISA:
 
         return test_statistic, combined_p_value
 
-    @staticmethod
-    def create_label_dictionary(query_list, background_list):
-        return { #this dict is used to create label vector for LISA algo
-            gene.get_location() : int(i < len(query_list))
-            for i, gene in enumerate(list(query_list) + list(background_list))
-        }, dict( #return this dict for results (purely informational)
-            query_symbols = query_list.get_symbols(),
-            background_symbols = background_list.get_symbols(),
-            query_locations = query_list.get_locations(),
-            background_locations = background_list.get_locations(),
-        )
-
-    def _sample_background_genes(self, query_genes, background_strategy = 'regulatory', num_background_genes = 3000, seed = None):
-
-        assert( num_background_genes >= len(query_genes) and len(query_genes) <= 19000//2 ), "More query genes selected than background genes"
-
-        background_candidates = self.all_genes.get_distinct_genes_by_symbol(excluding = query_genes.get_symbols())
-
-        assert(len(background_candidates) >= num_background_genes), 'Number of background candidates must be greater than or equal number of genes to select as background.'
-        #if no down-sampling is needed:
-        if len(background_candidates) == num_background_genes:
-            background_genes = background_candidates
-
-        if background_strategy == 'regulatory':
-
-            background_genes = background_candidates.sample_by_TAD(num_background_genes, seed = seed)
-
-            if len(background_genes) > num_background_genes:
-                background_genes = background_genes.random_sample(num_background_genes, seed = seed)
-
-        elif background_strategy == 'random':
-            background_genes = background_candidates.random_sample(num_background_genes, seed = seed)
-        else:
-            raise AssertionError('Background selection strategy {} not supported'.format(background_strategy))
-
-        return background_genes
-
-
-    def _get_query_and_background_genes(self, query_list, *, background_list = [], num_background_genes = 3000, background_strategy =
-        'regulatory', seed = None):
-
-        query_list = self._preprocess_gene_list(query_list)
-        background_list = self._preprocess_gene_list(background_list)
-
-        query_genes = self.all_genes.match_user_provided_genes(query_list)
-
-        assert(20 <= len(query_genes) <= self.max_query_genes), 'User must provide list of 20 to {} unique genes. Provided {}'\
-            .format(str(self.max_query_genes), str(len(query_genes)))
-
-        if background_strategy == 'provided':
-            
-            background_matches = self.all_genes.match_user_provided_genes(background_list)
-            background_genes = background_matches.get_distinct_genes_by_symbol(excluding = query_genes.get_symbols())
-            assert( len(background_genes) > len(query_genes) )
-        
-        else:
-            background_genes = self._sample_background_genes(query_genes, background_strategy = background_strategy, 
-                num_background_genes = num_background_genes, seed = seed)
-
-        return query_genes, background_genes
-
-
-    def _make_gene_mask(self, query_genes, background_genes):
-
-        label_dict, gene_info_dict = self.create_label_dictionary(query_genes, background_genes)
-
-        #Show user number of query and background genes selected
-        self.log.append('Selected {} query genes and {} background genes.'\
-            .format(str(len(gene_info_dict['query_symbols'])), str(len(gene_info_dict['background_symbols']))))
-
-        #subset the rp map for those genes and make label vector
-        gene_mask = np.isin(self.rp_map_locs, list(label_dict.keys()))
-        #make label vector from label_dict based of gene_loc ordering in rp_map data
-        label_vector = np.array([label_dict[gene_loc] for gene_loc in self.rp_map_locs[gene_mask]])
-        
-        return gene_mask, label_vector, gene_info_dict
-
-
-    def _format_results(self, *, combined_test_statistic, combined_p_values, assay_pvals, assay_info, gene_info_dict):
+    def _format_results(self, *, assay_pvals, assay_info, gene_info_dict, **kwargs):
         self.log.append('Formatting output ...')
         #instantiate a lisa results object
         results = LISA_Results.fromdict(
-            **self.assays[0].get_metadata(),
-            combined_test_statistic = combined_test_statistic,
-            combined_p_value = combined_p_values,
-            **assay_pvals
+            **self.link_metadata(self.isd_method).select(self.factor_dataset_ids),
+            **assay_pvals,
+            **kwargs
         )
 
-        results = results.sortby('combined_test_statistic', add_rank = True, reverse = True)
+        results = results.sortby('summary_p_value', add_rank = True, reverse = False)
         
         self.log.append('Done!')
         
@@ -370,67 +414,84 @@ class LISA:
             **assay_info
         )
 
+    def _summarize_p_values(self, assay_pvals):
+        
+        if len(assay_pvals) > 1:
+            #combine p-values from all assays on a per-sample basis
+            with self.log.section('Mixing effects using Cauchy combination ...'):
 
-    def _run_assays(self, gene_mask, label_vector):
+                aggregate_pvals = np.array(list(assay_pvals.values())).T
+                
+                combined_statistic, summary_p_value = self._combine_tests(aggregate_pvals)
+        else:
+            summary_p_value = np.array(list(assay_pvals.values())).reshape(-1)
 
-        with h5.File(self.data_source, 'r') as data:
-            #run each assay specified in the _load_data step. Each assay returns a p_value for each factor binding sample, and returns metadata
-            #each assay takes the same arguments and makes the same returns but can perform different tests
-            assay_pvals, assay_info = {},{}
-            for assay in self.assays:
-                assay_pvals[assay.technology + '_p_value'] = assay.predict(gene_mask, label_vector, data)
-                assay_info[assay.technology + '_model_info'] = assay.get_info()
+        return summary_p_value
 
-        return assay_pvals, assay_info
-
-
-    def predict(self, query_list, background_list = [], background_strategy = 'regulatory', num_background_genes = 3000, seed = None):
-
-        #validate user args
+    #___ CLASS PREDICTION FUNCTION (USER INTERFACE) ___
+    def predict(self, query_list, background_list = [], background_strategy = 'regulatory', num_background_genes = 3000, seed = 2556):
+        
         if self.oneshot and self.used_oneshot:
             raise AssertionError('When instantiated in one-shot, model cannot be used for multiple predictions')
-        if background_list is None:
-            background_list = []
-        assert( isinstance(num_background_genes, int) )
-        assert( background_strategy in  self.background_options ), 'Background strategy must be in \{{}\}'.format(', '.join(self.background_options))
-        assert( isinstance(query_list, Iterable) )
-        assert( isinstance(background_list, Iterable))
-        #check to make sure data is downloaded
-        try:
-            self._check_for_data()
-        except DownloadRequiredError:
-            self._download_data()
-            self._check_for_data()
         
         try:
-            self.log.append('Using {} cores ...'.format(str(self.cores)))
+            self._initialize_resources()
 
-            if not self._is_loaded:
-                self._load_data()
+            if len(self.assays) == 0:
+                #the initialize assay section is the mutable section for each interface
                 self._initialize_assays()
 
-            with self.log.section('Matching genes and selecting background ...'):
+            gene_mask, label_vector, gene_info_dict = self._choose_genes(query_list, background_list, background_strategy, num_background_genes, seed)
 
-                if len(background_list) > 0 and background_strategy == 'provided':
-                    self.log.append('User provided background genes!')
-
-                query_genes, background_genes = self._get_query_and_background_genes(query_list, background_list = background_list, 
-                        num_background_genes = num_background_genes, background_strategy = background_strategy, seed = seed)
-                
-                gene_mask, label_vector, gene_info_dict = self._make_gene_mask(query_genes, background_genes)
-
-            #based on genes selected, only subset of data can be loaded
             assay_pvals, assay_info = self._run_assays(gene_mask, label_vector)
-        
+
+            summary_p_value = self._summarize_p_values(assay_pvals)
+
+            return self._format_results(summary_p_value = summary_p_value, assay_pvals = assay_pvals, assay_info = assay_info,
+                gene_info_dict = gene_info_dict)
+
         except (FileNotFoundError, OSError):
             raise DownloadRequiredError('Data is malformed or incomplete, run "lisa download [species]" to redownload dataset')
+        
+"""
+LISA_Core implements the main methods for results formatting and data loading that make
+up a standard LISA application. Extensions of the core method may instantiate different assays
+depending on the data available to asses TF influence in different ways.
 
-        #combine p-values from all assays on a per-sample basis
-        with self.log.section('Mixing effects using Cauchy combination ...'):
+If only expression data is available, the base LISA interface can be instantiated, which 
+will use public data to estimate TF influence.
+"""
+class LISA(LISA_Core):
 
-            aggregate_pvals = np.array(list(assay_pvals.values())).T
-            
-            combined_statistic, combined_p_values = self._combine_tests(aggregate_pvals)
+    def __init__(self, *args, assays = ['Direct','H3K27ac','DNase'], **kwargs):
+        super().__init__(*args, **kwargs)
+        assert(len(assays) > 0), 'Must provide at least one assay to run.'
+        assert(all([assay in _config.get('lisa_params','assays').split(',') for assay in assays])), 'An assay chosen by the user is not a valid choice: \{{}\}'.format(_config.get('lisa_params','assays'))
+        self.run_assays = sorted(list(set(assays)))
 
-        return self._format_results(combined_test_statistic = combined_statistic, combined_p_values = combined_p_values, assay_pvals = assay_pvals, assay_info = assay_info,
-            gene_info_dict = gene_info_dict)
+    def _initialize_assays(self):
+        #Add assays to LISA's steps. Each assay follows the same instantiation and prediction calling, making them modular and substitutable.
+        #Adding an assay loads the required data for that assay
+
+        #The first assay to be loaded must be the ChIP-seq or Motif direct knockout, because this assay supplies the 
+        #metadata for the final output table since it holds information on all factor binding samples
+        assay_kwargs = dict(config = _config, cores = self.cores, log = self.log, oneshot = self.oneshot)
+        for assay in self.run_assays:
+            if assay == 'Direct':
+                self.add_assay(
+                    assays.PeakRP_Assay(
+                        technology = self.isd_method, **assay_kwargs, 
+                        metadata = self.link_metadata(self.isd_method),
+                    )
+                )
+            elif assay == 'DNase' or assay == 'H3K27ac':
+                self.add_assay(
+                    assays.Accesibility_Assay(technology = assay, **assay_kwargs,
+                        metadata = self.link_metadata(assay),
+                        rp_map = self.rp_map, factor_binding = self.factor_binding,
+                        selection_model = LR_BinarySearch_SampleSelectionModel(self.num_datasets_selected_anova, self.num_datasets_selected),
+                        chromatin_model = LR_ChromatinModel({'C' : list(10.0**np.arange(-2,4.1,0.5))}, penalty = 'l2')
+                    )
+                )
+            else:
+                raise AssertionError('Invalid assay encountered: {}'.format(str(assay)))
