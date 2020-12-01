@@ -92,7 +92,7 @@ class LR_BinarySearch_SampleSelectionModel(SampleSelectionModel):
         # Normalize with mean centering and log transformation
         index_array = np.arange(rp_matrix.shape[1])
 
-        X = StandardScaler(with_std = True).fit_transform( np.log2(rp_matrix + 1) )
+        X = StandardScaler(with_std = False).fit_transform( np.log2(rp_matrix + 1) )
 
         #narrow features with anova selection
         anova_featues = SelectKBest(f_classif, k=self.num_anova_features).fit(X, labels).get_support()
@@ -141,7 +141,7 @@ class LR_ChromatinModel(ChromatinModel):
 
         self.rp_0 = rp_matrix
 
-        self.normalizer = StandardScaler(with_std = True)
+        self.normalizer = StandardScaler(with_std = False)
 
         X0 = self.normalizer.fit_transform( np.log2(self.rp_0 + 1)  )
 
@@ -195,17 +195,6 @@ class UnweightedChromatinModel(ChromatinModel):
         self.model = FakeModel(rp_matrix.shape[1])
 
         return self
-
-    def get_deltaRP_activation(self, rp_knockout):
-        """
-        rp_knockout: is a datacube of shape (genes, samples, TFs),
-        this method must implement a transformation into a genes x TFs matrix, sumarrizing the dataset-axis effects
-        """
-        #subtract define deltaX to be the log2 of the fraction of knocked-out RP
-        deltaX = np.log2(self.rp_0[:,:,np.newaxis] - rp_knockout + 1) - np.log2(self.rp_0[:,:,np.newaxis] + 1)
-        
-        #flip sign so that more knockout = more deltaR
-        return -1 * deltaX.transpose(0,2,1).dot(self.model.coef_.reshape(-1))
 
     def get_info(self):
         return dict()

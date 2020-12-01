@@ -5,6 +5,7 @@ from scipy import stats, sparse
 import os
 #from pyranges.pyranges import PyRange
 from lisa.models import UnweightedChromatinModel
+from collections import defaultdict
 
 def get_delta_RP(profile, binding_data, rp_map):
     '''
@@ -34,13 +35,12 @@ def mannu_test_function(x):
 
 class LISA_RP_Assay:
 
-    def __init__(self, *, technology, config, cores, log, oneshot, metadata):
+    def __init__(self, *, technology, config, cores, log, metadata):
         self.config = config
         self.technology = technology
         self.cores = cores
         self.log = log
         self.loaded = False
-        self.oneshot = False
         self.metadata = metadata
 
     @staticmethod
@@ -62,11 +62,7 @@ class LISA_RP_Assay:
         
         dataset_ids = data_object[self.config.get('accessibility_assay', 'reg_potential_dataset_ids').format(technology = self.technology)][...].astype(str)
 
-        if self.oneshot and not gene_mask is None:
-            rp_matrix = data_object[self.config.get('accessibility_assay', 'reg_potential_matrix').format(technology = self.technology)][gene_mask, :]
-        else:
-            self.oneshot = False
-            rp_matrix = data_object[self.config.get('accessibility_assay', 'reg_potential_matrix').format(technology = self.technology)][...]
+        rp_matrix = data_object[self.config.get('accessibility_assay', 'reg_potential_matrix').format(technology = self.technology)][...]
         
         self.loaded = True
         return rp_matrix, dataset_ids
@@ -116,7 +112,7 @@ class PeakRP_Assay(LISA_RP_Assay):
         self.log.append('Calculating {} peak-RP p-values ...'.format(self.technology))
         
         #calculate p-values by directly applying mannu-test on RP matrix. Subset the RP matrix for genes-of-interest if required
-        p_vals = self.get_delta_RP_p_value(self.rp_matrix[gene_mask, :] if not self.oneshot else self.rp_matrix, label_vector)
+        p_vals = self.get_delta_RP_p_value(self.rp_matrix[gene_mask, :], label_vector)
 
         return p_vals
 
@@ -138,20 +134,22 @@ class KnockoutGenerator:
     
 class Accesibility_Assay(LISA_RP_Assay):
 
-    def __init__(self, *, technology, config, cores, log, oneshot, rp_map, factor_binding, selection_model, chromatin_model,
-        metadata):
+    def __init__(self, *, technology, config, cores, log, rp_map, factor_binding, selection_model, chromatin_model,
+        metadata, factor_gene_mask):
         super().__init__(technology = technology, config=config,cores=cores, log=log,
-            metadata = metadata, oneshot=oneshot)
+            metadata = metadata)
         self.rp_map = rp_map
         self.factor_binding = factor_binding
         self.selection_model = selection_model
         self.chromatin_model = chromatin_model
+        self.factor_gene_mask = factor_gene_mask
 
     def get_info(self):
         return dict(
             selection_model = self.selection_model.get_info(),
             chromatin_model = self.chromatin_model.get_info(),
             selected_datasets = self.metadata.select(list(self.selected_dataset_ids)),
+            factor_acc_z_scores = self.factor_acc_z_scores
         )
 
     def load_accessibility_profiles(self, data_object, selected_dataset_ids):
@@ -199,6 +197,24 @@ class Accesibility_Assay(LISA_RP_Assay):
 
         return delta_regulation_score, datacube
 
+    def introsect_accessibility(self, rp_matrix, gene_mask, dataset_mask, dataset_coefs):
+
+        #print(rp_matrix.shape, gene_mask.shape, gene_mask.dtype)
+
+        factor_accessiblities = np.log2(rp_matrix[gene_mask, :] + 1)
+
+        background_datasets = factor_accessiblities[:, ~dataset_mask]
+
+        factor_means, factor_stds = background_datasets.mean(axis = 1, keepdims = True), background_datasets.std(axis = 1, keepdims = True)
+        factor_acc_z_scores = (factor_accessiblities[:, dataset_mask] - factor_means)/factor_stds
+
+        dataset_coefs = dataset_coefs.reshape(-1)
+        dataset_coefs_mask = dataset_coefs > 0
+        coef_weights = dataset_coefs[dataset_coefs_mask]/dataset_coefs[dataset_coefs_mask].sum()
+        factor_acc_z_scores = np.mean(np.multiply(factor_acc_z_scores[:, dataset_coefs_mask], coef_weights.reshape(1,-1)), axis = 1)
+
+        return factor_acc_z_scores
+
     def predict(self, gene_mask, label_vector, data_object, debug = False):
 
         with self.log.section('Modeling {} purturbations:'.format(self.technology)):
@@ -208,7 +224,7 @@ class Accesibility_Assay(LISA_RP_Assay):
             except AttributeError:
                 self.load(data_object, gene_mask= gene_mask)
 
-            subset_rp_matrix = self.rp_matrix[gene_mask, :] if not self.oneshot else self.rp_matrix
+            subset_rp_matrix = self.rp_matrix[gene_mask, :]
 
             #DNase model building and purturbation
             self.log.append('Selecting discriminative datasets and training chromatin model ...')
@@ -216,6 +232,7 @@ class Accesibility_Assay(LISA_RP_Assay):
             #select the most discriminative datasets
             dataset_mask = self.selection_model.fit(subset_rp_matrix, label_vector)
             #subset the best datasets
+
             subset_rp_matrix, self.selected_dataset_ids = subset_rp_matrix[:, dataset_mask], self.dataset_ids[dataset_mask]
             #fit the chromatin model to these datasets
             self.chromatin_model.fit(subset_rp_matrix, label_vector, self.cores)
@@ -233,6 +250,11 @@ class Accesibility_Assay(LISA_RP_Assay):
                 
                 p_vals = self.get_delta_RP_p_value(delta_reg_scores, label_vector)
         
+            
+            self.log.append('Introspecting accessibility around factors ...')
+            self.factor_acc_z_scores = self.introsect_accessibility(self.rp_matrix, self.factor_gene_mask, dataset_mask,
+                self.chromatin_model.model.coef_)
+
             self.log.append('Done!')
 
         if debug:

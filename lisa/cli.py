@@ -1,5 +1,5 @@
 from lisa import LISA, Log, _config, __version__, __file__
-from lisa.lisa import PACKAGE_PATH
+from lisa.lisa_core import PACKAGE_PATH
 import configparser
 import argparse
 import os
@@ -10,7 +10,7 @@ from shutil import copyfile
 
 #____COMMAND LINE INTERFACE________
 
-INSTANTIATION_KWARGS = ['cores','isd_method','verbose','oneshot']
+INSTANTIATION_KWARGS = ['cores','isd_method','verbose','rp_map','assays']
 PREDICTION_KWARGS = ['background_list','num_background_genes','background_strategy', 'seed']
 
 def extract_kwargs(args, keywords):
@@ -74,7 +74,7 @@ def save_and_get_top_TFs(args, query_name, results, metadata):
 
 
 def print_results_multi(results_summary):
-    print('Sample\tTop Regulatory Factors (p < 0.05)')
+    print('Sample\tTop Regulatory Factors (p < 0.01)')
     for result_line in results_summary:
         print(result_line[0], ', '.join(result_line[1]), sep = '\t')
 
@@ -208,7 +208,7 @@ def build_common_args(parser):
     parser.add_argument('--use_motifs', action = 'store_const', const = 'motifs', default='chipseq',
         dest = 'isd_method', help = 'Use motif hits instead of ChIP-seq peaks to represent TF binding (only recommended if TF-of-interest is not represented in ChIP-seq database).')
     parser.add_argument('--save_metadata', action = 'store_true', default = False, help = 'Save json-formatted metadata from processing each gene list.')
-    parser.add_argument('-a','--assays',nargs='?',default=['Direct','H3K27ac','DNase'], choices=['Direct','H3K27ac','DNase'])
+    parser.add_argument('-a','--assays',nargs='+',default=['Direct','H3K27ac','DNase'], choices=['Direct','H3K27ac','DNase'])
 
 def build_multiple_lists_args(parser):
     parser.add_argument('query_lists', type = argparse.FileType('r', encoding = 'utf-8'), nargs = "+", help = 'user-supplied gene lists. One gene per line in either symbol or refseqID format')
@@ -256,7 +256,7 @@ X. Shirley Liu Lab, 2020\n
     background_genes_group.add_argument('-b','--num_background_genes', type = int, default = _config.get('lisa_params', 'background_genes'),
         help = 'Number of sampled background genes to compare to user-supplied genes')
     oneshot_parser.add_argument('-v','--verbose',type = int, default = 4)
-    oneshot_parser.set_defaults(func = lisa_oneshot, oneshot = True)
+    oneshot_parser.set_defaults(func = lisa_oneshot)
     
     #__ LISA multi command __#################
 
@@ -266,14 +266,14 @@ X. Shirley Liu Lab, 2020\n
     multi_parser.add_argument('-b','--num_background_genes', type = int, default = _config.get('lisa_params', 'background_genes'),
         help = 'Number of sampled background genes to compare to user-supplied genes. These genes are selection from other gene lists.')
     multi_parser.add_argument('--random_background', action = 'store_const', const = 'random', default = 'regulatory', dest = 'background_strategy', help = 'Use random background selection rather than "regulatory" selection.')
-    multi_parser.set_defaults(func = lisa_multi, oneshot = False, background_list = None)
+    multi_parser.set_defaults(func = lisa_multi, background_list = None)
     
     #__ LISA one-vs-rest command __#################
 
     one_v_rest_parser = subparsers.add_parser('one-vs-rest', help = 'Compare gene lists in a one-vs-rest fashion. Useful downstream of cluster analysis.\n')
     build_common_args(one_v_rest_parser)
     build_multiple_lists_args(one_v_rest_parser)
-    one_v_rest_parser.set_defaults(func = lisa_one_v_rest, oneshot = False, background_strategy = 'provided')
+    one_v_rest_parser.set_defaults(func = lisa_one_v_rest, background_strategy = 'provided')
 
     download_data_parser = subparsers.add_parser('download', help = 'Download data from CistromeDB. Use if data recieved is incomplete or malformed.')
     download_data_parser.add_argument('species', choices = ['hg38','mm10'], help = 'Download data associated with human (hg38) or mouse (mm10) genes')   
@@ -309,7 +309,7 @@ X. Shirley Liu Lab, 2020\n
     for flag in 'clean,web,new_rp_h5,new_count,epigenome,cluster,random,covariates'.split(','):
         backcompat_parser.add_argument('--' + flag, required=False, help = 'deprecated option')
     backcompat_parser.add_argument('-v','--verbose',type = int, default = 4)
-    backcompat_parser.set_defaults(func = lisa_backcompatible, oneshot = True, background_strategy = 'regulatory')
+    backcompat_parser.set_defaults(func = lisa_backcompatible, background_strategy = 'regulatory')
     backcompat_parser.add_argument('--save_metadata', action = 'store_true', default = False, help = 'Save json-formatted metadata from processing each gene list.')
     args = parser.parse_args()
 
