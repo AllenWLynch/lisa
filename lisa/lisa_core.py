@@ -224,13 +224,16 @@ For better efficiency, make #datasets a multiple of #cores.'''.format(self.cores
         
         return True
 
+    def get_dataset_url(self):
+        return _config.get('downloads','dataset').format(species = self.species, version = REQURED_DATASET_VERSION)
+
     def download_data(self):
 
         with self.log.section('Grabbing {} data (~15 minutes):'.format(self.species)):
             
             self.log.append('Downloading from database ...')
                         
-            dataset_url = _config.get('downloads','dataset').format(species = self.species, version = REQURED_DATASET_VERSION)
+            dataset_url = self.get_dataset_url()
 
             try:
                 self.fetch_from_cistrome(dataset_url, self.data_path, is_tar=True)

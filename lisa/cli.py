@@ -7,10 +7,11 @@ import sys
 import json
 from collections import defaultdict
 from shutil import copyfile
+import lisa.test_cli as tests
 
 #____COMMAND LINE INTERFACE________
 
-INSTANTIATION_KWARGS = ['cores','isd_method','verbose','rp_map','assays']
+INSTANTIATION_KWARGS = ['cores','isd_method','verbose','assays']
 PREDICTION_KWARGS = ['background_list','num_background_genes','background_strategy', 'seed']
 
 def extract_kwargs(args, keywords):
@@ -28,9 +29,17 @@ def is_valid_prefix(prefix):
 
 def lisa_download(args):
     lisa = LISA(args.species)
-    lisa.download_data()
+    if args.url:
+        print(lisa.get_dataset_url())
+    else:
+        lisa.download_data()
 
 def lisa_oneshot(args):
+
+    try:
+        args.background_list = args.background_list.readlines()
+    except AttributeError:
+        pass
 
     results, metadata = LISA(args.species, **extract_kwargs(args, INSTANTIATION_KWARGS)).predict(args.query_list.readlines(), **extract_kwargs(args, PREDICTION_KWARGS))
     
@@ -107,6 +116,7 @@ def lisa_one_v_rest(args):
     log = Log(target = sys.stderr, verbose = args.verbose)
     lisa = LISA(args.species, **extract_kwargs(args, INSTANTIATION_KWARGS), log = log)
     
+    log.append('One-vs-rest mode has been found to produce unstable results and will be deprecated in the future.\nConsider using "multi" mode instead.')
     queries = {query.name : query.readlines() for query in args.query_lists}
 
     cluster_lists = {
@@ -201,6 +211,13 @@ def lisa_backcompatible(args):
 
     make_summary_table(args.prefix + '.combined.' + original_isd_names[args.isd_method] + '.csv', results)
 
+def run_tests(args):
+
+    if not args.skip_oneshot:
+        tests.test_oneshot(args.test_genelist, args.background_genelist)
+
+    tests.test_multi(args.genelists)
+        
 def build_common_args(parser):
     parser.add_argument('species', choices = ['hg38','mm10'], help = 'Find TFs associated with human (hg38) or mouse (mm10) genes')
     parser.add_argument('-c','--cores', required = True, type = int, default = 1)
@@ -277,6 +294,7 @@ X. Shirley Liu Lab, 2020\n
 
     download_data_parser = subparsers.add_parser('download', help = 'Download data from CistromeDB. Use if data recieved is incomplete or malformed.')
     download_data_parser.add_argument('species', choices = ['hg38','mm10'], help = 'Download data associated with human (hg38) or mouse (mm10) genes')   
+    download_data_parser.add_argument('--url', action = 'store_true', help = 'Get url for data download. Does not install data.')
     download_data_parser.set_defaults(func = lisa_download)
 
     
@@ -311,6 +329,16 @@ X. Shirley Liu Lab, 2020\n
     backcompat_parser.add_argument('-v','--verbose',type = int, default = 4)
     backcompat_parser.set_defaults(func = lisa_backcompatible, background_strategy = 'regulatory')
     backcompat_parser.add_argument('--save_metadata', action = 'store_true', default = False, help = 'Save json-formatted metadata from processing each gene list.')
+    
+    #____ LISA run tests command _______
+    test_parser = subparsers.add_parser('run-tests')
+    test_parser.add_argument('test_genelist', type = confirm_file, help = 'test genelist for oneshot command')
+    test_parser.add_argument('background_genelist', type = confirm_file, help = 'background genelist for oneshot command')
+    test_parser.add_argument('genelists', nargs = '+', type = str, help = 'genelists for testing multi and one-vs-rest commands')
+    test_parser.add_argument('--skip_oneshot', action='store_true')
+    args = parser.parse_args()
+    test_parser.set_defaults(func = run_tests)
+    
     args = parser.parse_args()
 
     try:

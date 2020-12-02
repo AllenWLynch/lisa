@@ -1,6 +1,6 @@
 
 
-from setuptools import setup
+from setuptools import setup, find_packages
 
 with open('lisa/_version.py', 'r') as v:
     version = v.read().split('=')[-1].strip()
@@ -13,7 +13,7 @@ X. Shirley Liu Lab, 2020""",
     url = 'https://genomebiology.biomedcentral.com/articles/10.1186/s13059-020-1934-6',
     author = 'Allen Lynch',
     author_email = 'alynch@ds.dfci.harvard.edu',
-    packages = ['lisa'],
+    packages = find_packages(),
     zip_safe = False,
     scripts = ['bin/lisa'],
     install_requires = [
