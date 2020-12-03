@@ -76,6 +76,7 @@ def test_oneshot(test_genelist, background_list):
     )
 
     run_tests('lisa oneshot hg38 ' + test_genelist, oneshot_options)
+    run_tests('lisa oneshot mm10 ' + test_genelist, oneshot_options)
 
 def test_multi(genelists):
 
@@ -87,3 +88,4 @@ def test_multi(genelists):
     )
 
     run_tests('lisa multi hg38 ' + ' '.join(genelists), mulit_options)
+    run_tests('lisa multi mm10 ' + ' '.join(genelists), mulit_options)

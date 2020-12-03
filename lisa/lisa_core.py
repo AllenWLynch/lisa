@@ -45,12 +45,12 @@ class LISA_Core:
     def __init__(self, species, 
         cores = 1,
         isd_method = 'chipseq',
-        num_datasets_selected_anova = 200,
         num_datasets_selected = 10,
         verbose = True,
         log = None,
         rp_map = 'basic'
     ):
+        num_datasets_selected_anova = 200
         #all paramter checking is done on LISA instantiation to ensure consistency between python module and cmd line usage
         self.isd_options = _config.get('lisa_params', 'isd_methods').split(',')
         self.background_options = _config.get('lisa_params', 'background_strategies').split(',')

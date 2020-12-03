@@ -16,9 +16,9 @@ class Gene:
         self.aliases = []
         self.tad_domain = tad_domain
         if isinstance(names, str):
-            self.add_alias(names)
+            self.add_alias(names.upper())
         else:
-            self.add_aliases(names)
+            self.add_aliases([name.upper() for name in names])
         self.location = ':'.join([str(property_) for property_ in (self.chrom, self.start, self.end)])
         
     def add_alias(self, alias, is_name = True):

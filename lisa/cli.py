@@ -332,6 +332,7 @@ X. Shirley Liu Lab, 2020\n
     
     #____ LISA run tests command _______
     test_parser = subparsers.add_parser('run-tests')
+    test_parser.add_argument('species', type = str, choices=['hg38','mm10'])
     test_parser.add_argument('test_genelist', type = confirm_file, help = 'test genelist for oneshot command')
     test_parser.add_argument('background_genelist', type = confirm_file, help = 'background genelist for oneshot command')
     test_parser.add_argument('genelists', nargs = '+', type = str, help = 'genelists for testing multi and one-vs-rest commands')

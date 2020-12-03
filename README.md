@@ -1,9 +1,19 @@
 
 # LISA: Landscape In-Silico deletion Analysis
 
+- [About](##About)
+- [Requirements](##Requirements)
+- [Installation](##Installation)
+	- [PyPI](###PyPI)
+	- [Conda](###Conda)
+- [Usage](##Usage)
+- [File Formats](###output-file-formats)
+- [Python API](###python-module)
+- [Changelog](##Changelog)
+
 ## About
 
-LISA predicts which TFs regulate a set of genes using integrative modeling of chromatin accessiblity and ChIP-seq binding. Particularly, LISA models the effects of deleting the influence of a TF on the expression of the genes-of-interest. For more information, see <a href=https://genomebiology.biomedcentral.com/articles/10.1186/s13059-020-1934-6>https://genomebiology.biomedcentral.com/articles/10.1186/s13059-020-1934-6</a>. This implementation extends the original, running 30x faster, reducing dependencies, and adding useful CLI functions for pipeline integration. 
+LISA is a statistical test for the influence of Transcription Factors on a set of genes which leverages integrative modeling of chromatin accessiblity and factor binding to make predictions that go beyond simple co-expression analysis. Particularly, LISA models the effects of deleting the influence of a TF on the cis regulatory elements of your genes-of-interest. For more information, see <a href=https://genomebiology.biomedcentral.com/articles/10.1186/s13059-020-1934-6>https://genomebiology.biomedcentral.com/articles/10.1186/s13059-020-1934-6</a>. This implementation extends the original, running faster, reducing dependencies, and adding useful CLI functions for pipeline integration.
 
 ## Requirements
 
@@ -50,65 +60,9 @@ Then install from Conda:
 (lisa_env) $ conda install -c allenwlynch lisa2
 ```
 
-### Troubleshooting data downloading
+### Dataset Installation Issues
 
-Occasionally, a user may not be able to connect to cistrome.org from their institutional server due to some security measure. To circumvent this, one can manually install the data required to run LISA. 
-
-First, on your local machine, download LISA's required data from cistrome.org (this command fetches the human genome (hg38) data for all LISA versions 2.0.x. If you required mouse (mm10) data, substitute the hg38 in the path for mm10).
-
-*local*
-```bash
-$ wget http://http://cistrome.org/~alynch/data/lisa_data/hg38_2.0.tar.gz
-```
-
-Next, on your server, go to the virtual environment in which the LISA package is installed, then enter the python interpretter using the "python" command. Import the ```lisa``` package, then find the install path (something like ~/miniconda3/envs/lisa_env/python3.8/site_packages/lisa). Copy that path, leaving off the ```__init__.py```:
-
-*server*
-```bash
-(lisa_env) $ python
->>> import lisa
->>> lisa.__file__
-{PATH_TO_LISA}/__init__.py
->>> exit()
-```
-And, make a new folder under that directory on the server:
-```bash
-$ mkdir {PATH_TO_LISA}/data
-```
-
-Now, transfer the downloaded LISA data from your local machine to the directory you just created on the server:
-
-*local*
-```bash
-$ scp ./hg38_2.0.tar.gz {user}@{server}:/{PATH_TO_LISA}/data
-```
-
-Once the data is has transferred, the last step is to unpack the data in the server package and delete the tarball:
-
-*server*
-```bash
-(lisa_env) $ cd {PATH_TO_LISA}/data
-(lisa_env) $ tar -xvf hg38_2.0.tar.gz
-(lisa_env) $ ls
-hg38	hg38_2.0.tar.gz
-(lisa_env) $ rm -rf hg38_2.0.tar.gz
-```
-
-The LISA site package folder should now contain a directory called ```data``` with the structure:
-```
-├── data
-│   ├── hg38
-│   │   ├── ChIP-seq_binding.npz
-│   │   ├── gene_locs.txt
-│   │   ├── genes.tsv
-│   │   ├── lisa_data_hg38_reads_normalized.h5
-│   │   ├── metadata
-│   │   │   ├── lisa_meta.tsv
-│   │   │   └── motifs_meta.tsv
-│   │   ├── Motifs_binding.npz
-│   │   └── RP_map.npz
-│   └── hg38_version.txt
-```
+If you successfully install lisa, then the program fails while downloading data, follow these [manual dataset installation instructions.](docs/troubleshooting.md)
 
 ## Usage
 
@@ -116,23 +70,19 @@ Installing LISA adds a command to your path:
 
 ```bash
 (lisa_env) $ lisa 
-Lisa: inferring transcriptional regulators through integrative modeling of
-public chromatin accessibility and ChIP-seq data
-https://genomebiology.biomedcentral.com/articles/10.1186/s13059-020-1934-6 X.
-Shirley Liu Lab, 2020
+Lisa: inferring transcriptional regulators through integrative modeling of public chromatin accessibility and ChIP-seq data
+https://genomebiology.biomedcentral.com/articles/10.1186/s13059-020-1934-6 X. Shirley Liu Lab, 2020
 
 positional arguments:
-  {oneshot,multi,one-vs-rest,download}
+  {oneshot,multi,one-vs-rest,download,unpack,backcompat,run-tests}
                         commands
-    oneshot             Use LISA to infer genes from one gene list. If you
-                        have multiple lists, this option will be slower than
-                        using "multi" due to data-loading time.
-    multi               Process multiple genelists. This reduces data-loading
-                        time if using the same parameters for all lists.
-    one-vs-rest         Compare gene lists in a one-vs-rest fashion. Useful
-                        downstream of cluster analysis.
-    download            Download data from CistromeDB. Use if data recieved is
-                        incomplete or malformed.
+    oneshot             Use LISA to infer genes from one gene list. If you have multiple lists, this option will be slower than using "multi" due to data-loading
+                        time.
+    multi               Process multiple genelists. This reduces data-loading time if using the same parameters for all lists.
+    one-vs-rest         Compare gene lists in a one-vs-rest fashion. Useful downstream of cluster analysis.
+    download            Download data from CistromeDB. Use if data recieved is incomplete or malformed.
+    unpack              Helper command for manually installing Lisa's data
+    backcompat          Interface with LISA using the version 1 command line constructs
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -140,8 +90,6 @@ optional arguments:
 ```
 
 LISA's functionality is divided into three subcommands. If you have one set of genes-of-interest, run the "oneshot" command. If you have many gene lists from different experiments, run "multi", which treats each list independently but reduces data-loading time compared to running "oneshot" multiple times.
-
-Lastly, if you are performing cluster-based differential expression analysis, a common workflow involves identifying lists of cluster-specific differentially-expressed genes. These genelists can be used by LISA in a one-vs-rest fashion to identify TFs that regulate each cluster. 
 
 ### oneshot usage:
 
@@ -155,65 +103,30 @@ Now, run the "lisa oneshot" command, which will be fastest since it only loads d
 **To make this command run much faster, fill the "-c/--cores" parameter, up to 10**
 
 ```bash
-(lisa_env) $ lisa oneshot hg38 sox2_down.txt -b 3000 -c 1 --seed=2556 > results.tsv
-Data not found, must download from CistromeDB ...
-Grabbing hg38 data (~15 minutes):
-	Downloading from database ...
-	Extracting data ...
-        Done!                                   
-        
-Using 10 cores ...
-Matching genes and selecting background ...
-	Selected 133 query genes and 500 background genes.
-Loading data into memory (only on first prediction):
-	Loading binding data ...
-	Loading regulatory potential map ...
-	Loading ChIP-seq RP matrix ...
-	Loading DNase RP matrix ...
-	Loading H3K27ac RP matrix ...
-	Done!
-Calculating ChIP-seq peak-RP p-values ...
-Modeling DNase purturbations:
-	Selecting discriminative datasets and training chromatin model ...
-	Calculating in-silico deletions:
-		Reading DNase data: [====================]
-		Performing in-silico knockouts ...
-		Calculating Δ regulatory score ...
-		Calculating p-values ...
-	Done!
-Modeling H3K27ac purturbations:
-	Selecting discriminative datasets and training chromatin model ...
-	Calculating in-silico deletions:
-		Reading H3K27ac data: [====================]
-		Performing in-silico knockouts ...
-		Calculating Δ regulatory score ...
-		Calculating p-values ...
-	Done!
-Mixing effects using Cauchy combination ...
-Formatting output ...
-Done!
+(lisa_env) $ lisa oneshot hg38 sox2_down.txt -b 300 -c 1 --seed=2556 --save_metadata> results.tsv
 ```
 
-The example above shows common a usage pattern of the "oneshot" command using 3000 genes as a comparitive background and with a seed supplied so that results are repeatable. The user must also specify the genes' species of origin, in this case human, hg38.
-This command prints a table of TFs sorted by regulatory effect on the genes-of-interest, seen here saved to ```results.tsv```.
+The example above shows common a usage pattern of the "oneshot" command using 300 genes as a comparitive background and with a seed supplied so that results are repeatable. You may want to use more background genes (up to 3000) to ensure a more stable prediction. 
+
+The user must also specify the genes' species of origin, in this case human, hg38.
+This command prints a table of TFs sorted by regulatory effect on the genes-of-interest, seen here saved to ```results.tsv```. For detailed descriptions of your options, run "lisa oneshot --help".
 
 ```bash
-(lisa_env) $ cat results.tsv | cut -f1,3,8 | head -n10
-Rank	factor	combined_p_value
-1	NANOG	2.3211382347622477e-21
-2	NANOG	5.591419465719548e-20
-3	NANOG	2.6179628478261444e-17
-4	NANOG	4.6683275052921544e-17
-5	NANOG	4.951497441623821e-17
-6	SOX2	5.773159728050814e-15
-7	SMAD3	9.325873406851315e-15
-8	NANOG	9.126033262418787e-14
-9	SMAD3	9.614531393253856e-14
+$ head -n10 results.tsv | cut -f1,3
+Rank 	 factor 
+1 	 NANOG 
+2 	 NANOG 
+3 	 NANOG 
+4 	 NANOG 
+5 	 NANOG 
+6 	 NANOG 
+7 	 SOX2 
+8 	 NANOG 
+1 	 NANOG
 ```
+Quickly inspecting the results, LISA found the effects of SOX2 regulation on this genelist to be highly-ranked! (7th of >8000 ChIP samples). The other TF found to regulate this genelist, NANOG, functions in concert with SOX2 to establish cell identity, so this is a strong prediction as well.  
 
-LISA found the effects of SOX2 regulation on this genelist to be highly-ranked! The other TF found to regulate this genelist, NANOG, functions in concert with SOX2 to establish cell identity, so this is a strong prediction as well.  
-
-### multi and one-vs-rest usage:
+### multi usage:
 
 To try this command, download a folder of different genelists from Cistrome server, and unpack them. These genelists contain differentially-expressed genes resulting from the knockout and activation of four transcription factors.
 
@@ -229,35 +142,56 @@ Now run ```lisa multi```, pointed at the directory of genelists. You many also p
 (lisa_env) $ lisa multi hg38 test_genelists/*.txt -o results/ -c 10 -b 500 --seed=2556
 ```
 
-The command above independently processes all genes lists in the "genelists" folder, and saves the results tables to the "results" folder. The top factors influencing each gene list are then printed to stdout as a summary table. 
+The command above independently processes all genes lists in the "genelists" folder, and saves the results tables to the "results" folder. The top factors influencing each gene list are then printed to stdout as a summary table.
 
-The CLI for ```lisa multi``` and ```lisa one-vs-rest``` commands is similar, but the difference is how these commands select background genes to compare with your genes-of-interest. In "lisa multi", background genes are chosen randomly or sampled from different regulatory states (default), but with ```lisa one-vs-rest``` Each list is compared against all genes in the other lists. This may provide a more robust analysis if each genelist were derived from diffentially-expressed genes in an upstream clustering analysis. 
+## Output File Formats
+
+#### Tabular Results - ChIP-seq mode
+
+| Column Name | Description |
+|--|--|
+| Rank | Ranking of factor influence with respect to "summary_p_value" |
+| sample_id | Cistrome.org sample ID |
+| factor | Factor/Motif gene symbol |
+| cell_line | cell line of ChIP-seq sample | 
+| cell_type | cell type |
+| tissue | tissue type |
+| DNase_p_value | TF influence assessed through DNase accessibility |
+| ChIP-seqy_p_value | TF influence through direct binding locality enrichment |
+| H3K27ac_p_value | TF influence through H3K27ac accessibility |
+| DNase_factor_accessibility_z_score | Mean accessibility of chromatin around the assessed factor's TSS. This may indicate if a particular factor scores highly for influence, but is not expressed in the accessibility samples used to assess that influence.
+| H3K27ac_factor_accessibility_z_score | same as above |
+| summary_p_value | Cauchy combined p-value aggregating results of all tests conducted |s
+
+
+#### Unstructured results (use --save_metadata option to keep)
+
+Contains various calculations used to conduct LISA's tests. Select keys shown below:
+| Key | Value |
+|--|--|
+| query_symbols | User-provided symbols representing genes-of-interest |
+| background_symbols | Background genes provided by user or selected by LISA |
+| DNase/H3K27ac -> chromatin_model -> coefs | Weights assigned to the contribution of each accessibility dataset to the LISA test |
+| DNase/H3K27ac -> selected_datasets | Selected accessibility datasets' metadata and attributes |
+
+The metadata and weights of accessibility datasets used in the LISA test may be important for performing your analysis of the results, and can show which tissues are highly accessibility around your genes of interest.
 
 ## Python Module
 
-Once installed, LISA may also be used as a python module:
-
-```python
-from lisa import LISA
-import pandas as pd
-
-lisa = LISA('hg38', cores = 10)
-
-with open('sox2_down.txt', 'r') as f:
-    query_list = f.readlines()
-
-results, metadata = lisa.predict(query_list)
-
-results_df = pd.DataFrame(results.todict())
-```
-
-The LISA module is implemented in the style of an sklearn estimator. First, the user instantiates a LISA model object, then uses that object to predict TFs from any number of genelists. "lisa.predict" returns a ```results``` object with handy data manipulation methods such as  ```sortby``` and ```subset```. Converting from the results object to a Pandas dataframe for analysis is shown above. Note that pandas is not required to use LISA.
+Once installed, LISA may also be used as a python module. Documentation can be viewed [here](docs/lisa_base.md).
 
 ## Changelog
 
-### [2.0.6] - 2020-11-22
+### [2.1.0] - 2020-12-01
 
-#### Added
+* Bigfixes in output of "lisa multi" test
+* Refactored classes for future extension to user-supplied fragment files and peaks
+* Added integration testing
+* Added factor accessibility introspection to results printout
+* Made RP maps substitutable for future tests
+* Made assays modular so users can specify which statistical tests they are interested in
+
+### [2.0.6] - 2020-11-22
 
 * Support for Lisa version 1 API for integration with LISA website
 * Bugfixes in motif mode results
