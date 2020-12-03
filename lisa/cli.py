@@ -1,5 +1,5 @@
 from lisa import LISA, Log, _config, __version__, __file__
-from lisa.lisa_core import PACKAGE_PATH
+from lisa.lisa_core import INSTALL_PATH
 import configparser
 import argparse
 import os
@@ -239,7 +239,7 @@ def confirm_file(arg):
         raise argparse.ArgumentTypeError('ERROR: {} is not a valid file'.format(str(arg)))
 
 def extract_tar_func(args):
-    LISA.extract_tar(args.tarball, rm = args.rm)
+    LISA.extract_tar(args.tarball, INSTALL_PATH, rm = args.rm)
     
 def main():
     parser = argparse.ArgumentParser(

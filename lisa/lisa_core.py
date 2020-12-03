@@ -24,6 +24,7 @@ from scipy import sparse, stats
 PACKAGE_PATH = os.path.dirname(__file__)
 CONFIG_PATH = os.path.join(PACKAGE_PATH, 'config.ini')
 REQURED_DATASET_VERSION = '.'.join(__version__.split('.')[:2])
+INSTALL_PATH = os.path.join(PACKAGE_PATH, 'data')
 
 _config = configparser.ConfigParser()
 _config.read(CONFIG_PATH)
@@ -77,7 +78,7 @@ class LISA_Core:
 
         self.data_source = _config.get('paths', 'h5_path').format(package_path = PACKAGE_PATH, species = self.species)
 
-        self.data_path = os.path.join(PACKAGE_PATH, 'data')
+        self.data_path = INSTALL_PATH
 
         #use provided log object or create a new one. Applications which call LISA may want to pass in their own log object for control of indentation
         if log is None:

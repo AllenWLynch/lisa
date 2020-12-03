@@ -46,13 +46,13 @@ results_df = pd.DataFrame(results_dict)
     <b>assays : {'Direct', 'H3K27ac', 'Direct'}, default=['Direct','H3K27ac','DNase']</b><br>
     Which assays to use to compute TF influence of your genes of interest. User may pass list of any assays from the options above.<br><br>
     <b>cores : int, default=1</b><br>
-    Number of cores. Recommended value is equal to "num_datasets_selected". In the default case, use at most 10 cores.<br><br>
+    Number of cores. Recommended to set equal to "num_datasets_selected". In the default case, use at most 10 cores.<br><br>
     <b>isd_method : {'chipseq', 'motifs'}, default='chipseq'</b><br>
     Use ChIP-seq or Motifs data to assess TF binding positions on the genome.<br><br>
     <b>num_datasets_selected : int, default=10</b><br>
-    Identify N accessibility datasets that show differential accessibility around your genes-of-interest.<br>
+    Identify N accessibility datasets that show differential accessibility around your genes-of-interest.<br><br>
     <b>verbose : bool, int, default=True</b><br>
-    Verbosity of LISA test status updates to stderr. To reduce, set verbose to <i>int</i> decribing number of levels to print.<br><br>
+    Verbosity of LISA test status updates to stderr. To reduce, set verbose to <i>int</i> decribing number of levels to print. <i>True</i> sets no limit on verbosity, <i>False</i> and <i>0</i> permit no printing.<br><br>
     <b>log : Log object, default=None</b><br>
 </div><br>
 
@@ -81,3 +81,5 @@ results_df = pd.DataFrame(results_dict)
         Dictionary of metadata used LISA models, for description of fields, see main github page.<br>
     </div>
 </div>
+
+[<- Back to homepage](#../README.md)

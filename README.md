@@ -62,7 +62,7 @@ Then install from Conda:
 
 ### Dataset Installation Issues
 
-If you successfully install lisa, then the program fails while downloading data, follow these [manual dataset installation instructions.](docs/troubleshooting.md)
+If you successfully install lisa but the program fails while downloading data, follow these [manual dataset installation instructions.](docs/troubleshooting.md)
 
 ## Usage
 
@@ -111,6 +111,8 @@ The example above shows common a usage pattern of the "oneshot" command using 30
 The user must also specify the genes' species of origin, in this case human, hg38.
 This command prints a table of TFs sorted by regulatory effect on the genes-of-interest, seen here saved to ```results.tsv```. For detailed descriptions of your options, run "lisa oneshot --help".
 
+Quickly inspecting the results, LISA found the effects of SOX2 regulation on this genelist to be highly-ranked! (7th of >8000 ChIP samples). The other TF found to regulate this genelist, NANOG, functions in concert with SOX2 to establish cell identity, so this is a strong prediction as well.  
+
 ```bash
 $ head -n10 results.tsv | cut -f1,3
 Rank 	 factor 
@@ -124,7 +126,6 @@ Rank 	 factor
 8 	 NANOG 
 1 	 NANOG
 ```
-Quickly inspecting the results, LISA found the effects of SOX2 regulation on this genelist to be highly-ranked! (7th of >8000 ChIP samples). The other TF found to regulate this genelist, NANOG, functions in concert with SOX2 to establish cell identity, so this is a strong prediction as well.  
 
 ### multi usage:
 
@@ -152,16 +153,16 @@ The command above independently processes all genes lists in the "genelists" fol
 |--|--|
 | Rank | Ranking of factor influence with respect to "summary_p_value" |
 | sample_id | Cistrome.org sample ID |
-| factor | Factor/Motif gene symbol |
+| factor | Factor gene symbol |
 | cell_line | cell line of ChIP-seq sample | 
 | cell_type | cell type |
 | tissue | tissue type |
 | DNase_p_value | TF influence assessed through DNase accessibility |
-| ChIP-seqy_p_value | TF influence through direct binding locality enrichment |
+| ChIP-seq_p_value | TF influence through direct binding locality enrichment |
 | H3K27ac_p_value | TF influence through H3K27ac accessibility |
-| DNase_factor_accessibility_z_score | Mean accessibility of chromatin around the assessed factor's TSS. This may indicate if a particular factor scores highly for influence, but is not expressed in the accessibility samples used to assess that influence.
+| DNase_factor_accessibility_z_score | Z-normalized score of accessibility of chromatin around the assessed factor's TSS. This may indicate if a particular factor scores highly for influence, but is not expressed in the accessibility samples used to assess that influence.
 | H3K27ac_factor_accessibility_z_score | same as above |
-| summary_p_value | Cauchy combined p-value aggregating results of all tests conducted |s
+| summary_p_value | Cauchy combined p-value aggregating results of all tests conducted. This is the best indicator of overall factor influence on your genes of interest. |
 
 
 #### Unstructured results (use --save_metadata option to keep)
