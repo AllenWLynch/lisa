@@ -1,16 +1,6 @@
 
 # LISA: Landscape In-Silico deletion Analysis
 
-- [About](##About)
-- [Requirements](##Requirements)
-- [Installation](##Installation)
-	- [PyPI](###PyPI)
-	- [Conda](###Conda)
-- [Usage](##Usage)
-- [File Formats](###output-file-formats)
-- [Python API](###python-module)
-- [Changelog](##Changelog)
-
 ## About
 
 LISA is a statistical test for the influence of Transcription Factors on a set of genes which leverages integrative modeling of chromatin accessiblity and factor binding to make predictions that go beyond simple co-expression analysis. Particularly, LISA models the effects of deleting the influence of a TF on the cis regulatory elements of your genes-of-interest. For more information, see <a href=https://genomebiology.biomedcentral.com/articles/10.1186/s13059-020-1934-6>https://genomebiology.biomedcentral.com/articles/10.1186/s13059-020-1934-6</a>. This implementation extends the original, running faster, reducing dependencies, and adding useful CLI functions for pipeline integration.
