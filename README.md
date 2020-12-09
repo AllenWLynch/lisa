@@ -47,7 +47,7 @@ First, create a virtual environment:
 Then install from Conda:
 
 ```bash
-(lisa_env) $ conda install -c allenwlynch lisa2
+(lisa_env) $ conda install -c liulab-dfci lisa2
 ```
 
 ### Dataset Installation Issues
