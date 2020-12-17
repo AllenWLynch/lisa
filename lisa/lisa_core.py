@@ -43,33 +43,18 @@ class LISA_Core:
         motifs = 'Motifs'
     )
 
-    def __init__(self, species, 
-        cores = 1,
+    def __init__(self, species,
         isd_method = 'chipseq',
-        num_datasets_selected = 10,
         verbose = True,
         log = None,
         rp_map = 'basic'
     ):
-        num_datasets_selected_anova = 200
+        
         #all paramter checking is done on LISA instantiation to ensure consistency between python module and cmd line usage
         self.isd_options = _config.get('lisa_params', 'isd_methods').split(',')
         self.background_options = _config.get('lisa_params', 'background_strategies').split(',')
         self.max_query_genes = int(_config.get('lisa_params', 'max_user_genelist_len'))
         
-        assert( isinstance(num_datasets_selected, int) )
-        assert( isinstance(num_datasets_selected_anova, int) )
-
-        self.num_datasets_selected_anova = num_datasets_selected_anova
-        self.num_datasets_selected = num_datasets_selected
-
-        self._set_cores(cores)
-
-        assert( num_datasets_selected_anova > num_datasets_selected ), 'Anova must select more datasets than the regression model'
-        assert( num_datasets_selected_anova > 0 and num_datasets_selected > 0 ), 'Number of datasets selected must be positive'
-        assert(num_datasets_selected_anova < 500)
-        assert(num_datasets_selected < 25)
-
         assert( isd_method in  self.isd_options ), 'ISD method must be \{{}}'.format(', '.join(self.isd_options))
         assert( species in ['mm10','hg38'] ), "Species must be either hg38 or mm10"
         
@@ -99,20 +84,6 @@ class LISA_Core:
             assert( isinstance(rp_map, np.ndarry) or isinstance(rp_map, scipy.sparse)), 'RP map must be either numpy ndarry or scipy.sparse matrix'
         self.rp_map = rp_map
 
-        if self.num_datasets_selected % self.cores != 0:
-            self.log.append('''WARNING: You\'ve allocated {} cores with {} datasets selected.
-To ensure maximum speed, allocate as many cores as datasets selected.
-For better efficiency, make #datasets a multiple of #cores.'''.format(self.cores, self.num_datasets_selected))
-
-    def _set_cores(self, cores):
-        assert( isinstance(cores, int) and cores >= -1)
-        #leave one core out for the rest of us
-        max_cores = multiprocessing.cpu_count() - 1
-        if cores <= -1:
-            cores = max_cores
-        #use the minimum number of cores between the user's specificaion, the number of datasets to be processed in parallel, and the number of cores on the machine.
-        #this prevents LISA from using more resources than required.
-        self.cores = min(cores, max_cores, self.num_datasets_selected)
 
     #____ DATA LOADING FUNCTIONS _____
 
@@ -127,6 +98,8 @@ For better efficiency, make #datasets a multiple of #cores.'''.format(self.cores
             rp_map_locs = np.array([line.strip() for line in f.readlines()])
 
         self.all_genes, self.rp_map_locs = all_genes, rp_map_locs
+
+        return self.all_genes, self.rp_map_locs
         
     def _load_factor_binding_data(self, data_object):
 
@@ -134,6 +107,8 @@ For better efficiency, make #datasets a multiple of #cores.'''.format(self.cores
             .format(technology = self.isd_method)][...].astype(str))
         
         self.factor_binding = sparse.load_npz(_config.get('factor_binding','matrix').format(package_path = PACKAGE_PATH, species = self.species, technology = self.isd_method))
+
+        return self.factor_binding, self.factor_dataset_ids
 
     def _load_rp_map(self):
         if isinstance(self.rp_map, str):
@@ -372,7 +347,7 @@ For better efficiency, make #datasets a multiple of #cores.'''.format(self.cores
             self.download_data()
             self._check_for_data()
 
-        self.log.append('Using {} cores ...'.format(str(self.cores)))
+        #self.log.append('Using {} cores ...'.format(str(self.cores)))
 
         if not self._is_loaded:
             self._load_data()

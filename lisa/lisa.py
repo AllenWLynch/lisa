@@ -4,6 +4,7 @@ import lisa.assays as assays
 from lisa.models import LR_BinarySearch_SampleSelectionModel
 from lisa.models import LR_ChromatinModel
 import numpy as np
+import multiprocessing
 """
 LISA_Core implements the main methods for results formatting and data loading that make
 up a standard LISA application. Extensions of the core method may instantiate different assays
@@ -14,12 +15,46 @@ will use public data to estimate TF influence.
 """
 class LISA(LISA_Core):
 
-    def __init__(self, *args, assays = ['Direct','H3K27ac','DNase'], **kwargs):
+    def __init__(self, *args, assays = ['Direct','H3K27ac','DNase'], num_datasets_selected = 10, cores = 1, **kwargs):
         super().__init__(*args, **kwargs)
         assert(len(assays) > 0), 'Must provide at least one assay to run.'
         assert(all([assay in _config.get('lisa_params','assays').split(',') for assay in assays])), 'An assay chosen by the user is not a valid choice: \{{}}'.format(_config.get('lisa_params','assays'))
         assert(self.rp_map == 'basic'), 'For base LISA predictor, rp map must be "basic".'
-        self.run_assays = sorted(list(set(assays)))
+
+        num_datasets_selected_anova = 200
+
+        assert( isinstance(num_datasets_selected, int) )
+        assert( isinstance(num_datasets_selected_anova, int) )
+
+        self.num_datasets_selected_anova = num_datasets_selected_anova
+        self.num_datasets_selected = num_datasets_selected
+
+        self.cores = self._set_cores(cores)
+
+        assert( num_datasets_selected_anova > num_datasets_selected ), 'Anova must select more datasets than the regression model'
+        assert( num_datasets_selected_anova > 0 and num_datasets_selected > 0 ), 'Number of datasets selected must be positive'
+        assert(num_datasets_selected_anova < 500)
+        assert(num_datasets_selected < 25)
+
+        if self.num_datasets_selected % self.cores != 0:
+            self.log.append('''WARNING: You\'ve allocated {} cores with {} datasets selected.
+To ensure maximum speed, allocate as many cores as datasets selected.
+For better efficiency, make #datasets a multiple of #cores.'''.format(self.cores, self.num_datasets_selected))
+
+        self.schedule_assays = sorted(list(set(assays)))
+
+
+    def _set_cores(self, cores):
+        assert( isinstance(cores, int) and cores >= -1)
+        #leave one core out for the rest of us
+        max_cores = multiprocessing.cpu_count() - 1
+        if cores <= -1:
+            cores = max_cores
+        #use the minimum number of cores between the user's specificaion, the number of datasets to be processed in parallel, and the number of cores on the machine.
+        #this prevents LISA from using more resources than required.
+        self.cores = min(cores, max_cores, self.num_datasets_selected)
+        return self.cores
+
 
     def get_factor_gene_mask(self):
 
@@ -56,7 +91,7 @@ class LISA(LISA_Core):
         except AttributeError:
             self.get_factor_gene_mask()
 
-        for assay in self.run_assays:
+        for assay in self.schedule_assays:
             if assay == 'Direct':
                 self.add_assay(
                     assays.PeakRP_Assay(
