@@ -1,5 +1,3 @@
-from lisa import Log
-from lisa import LISA_Core
 from itertools import product
 import subprocess
 import os

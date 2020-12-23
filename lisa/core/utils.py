@@ -14,6 +14,15 @@ def ragged_array_to_sparse_matrix(indices, values, col_length):
         for index_column, val_column in zip(indices, values)
     ])
 
+def indices_list_to_sparse_array(indices_list, num_bins):
+    return sparse.hstack([
+        sparse.csc_matrix(
+            (np.ones_like(ind), ind, [0, len(ind)]),
+            shape = (num_bins, 1)
+        )
+        for ind in indices_list
+    ])
+
 class LoadingBar:
     
     def __init__(self, label, increments, length = 25, cold_start = False):
@@ -85,7 +94,7 @@ class Metadata:
     def load_metadata(metadata_path):
         #reformat metadata tsv into conventiant id-indexed dictionary
         with open(metadata_path, 'r', encoding = 'latin') as metdata_file:
-            metadata = [[field.strip() for field in line.split('\t')] for line in metdata_file.readlines()]
+            metadata = [[field.strip().replace(',','-') for field in line.split('\t')] for line in metdata_file.readlines()]
                                 
         meta_headers, metadata = metadata[0], metadata[1:]
 

@@ -1,4 +1,7 @@
 include LICENSE
 include README.md
-include lisa/config.ini
+include lisa/core/config.ini
 include docs/*
+include lisa/genomes/*
+include lisa/lisa_public_data/config.ini
+include lisa/lisa_user_data/config.ini

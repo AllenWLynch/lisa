@@ -1,8 +1,9 @@
 
 #lisa modules
-import lisa.gene_selection as gene_selection
-from lisa.utils import LoadingBar, Log, LISA_Results, Metadata
+import lisa.core.gene_selection as gene_selection
+from lisa.core.utils import LoadingBar, Log, LISA_Results, Metadata
 from lisa._version import __version__
+from lisa._version import __file__ as version_file
 
 #standard library
 import configparser
@@ -21,13 +22,10 @@ import h5py as h5
 from scipy import sparse, stats
 #from pyranges.pyranges import PyRange
 
-PACKAGE_PATH = os.path.dirname(__file__)
-CONFIG_PATH = os.path.join(PACKAGE_PATH, 'config.ini')
+PACKAGE_PATH = os.path.dirname(version_file)
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.ini')
 REQURED_DATASET_VERSION = '.'.join(__version__.split('.')[:2])
 INSTALL_PATH = os.path.join(PACKAGE_PATH, 'data')
-
-_config = configparser.ConfigParser()
-_config.read(CONFIG_PATH)
 
 class DownloadRequiredError(BaseException):
     pass
@@ -43,25 +41,24 @@ class LISA_Core:
         motifs = 'Motifs'
     )
 
-    def __init__(self, species,
+    def __init__(self, species, config, 
         isd_method = 'chipseq',
         verbose = True,
         log = None,
-        rp_map = 'basic'
     ):
+
+        self._config = config
         
         #all paramter checking is done on LISA instantiation to ensure consistency between python module and cmd line usage
-        self.isd_options = _config.get('lisa_params', 'isd_methods').split(',')
-        self.background_options = _config.get('lisa_params', 'background_strategies').split(',')
-        self.max_query_genes = int(_config.get('lisa_params', 'max_user_genelist_len'))
+        self.isd_options = self._config.get('lisa_params', 'isd_methods').split(',')
+        self.background_options = self._config.get('lisa_params', 'background_strategies').split(',')
+        self.max_query_genes = int(self._config.get('lisa_params', 'max_user_genelist_len'))
         
         assert( isd_method in  self.isd_options ), 'ISD method must be \{{}}'.format(', '.join(self.isd_options))
         assert( species in ['mm10','hg38'] ), "Species must be either hg38 or mm10"
         
         self.isd_method = self.factor_binding_technologies[isd_method]
         self.species = species
-
-        self.data_source = _config.get('paths', 'h5_path').format(package_path = PACKAGE_PATH, species = self.species)
 
         self.data_path = INSTALL_PATH
 
@@ -77,13 +74,6 @@ class LISA_Core:
 
         self.assays = []
 
-        if isinstance(rp_map, str):
-            rp_map_styles = _config.get('lisa_params','rp_map_styles').split(',')
-            assert(rp_map in rp_map_styles), 'RP map must be numpy/scipy.sparse array, or be one of provided maps: {}'.format(','.join(rp_map_styles))
-        else:
-            assert( isinstance(rp_map, np.ndarry) or isinstance(rp_map, scipy.sparse)), 'RP map must be either numpy ndarry or scipy.sparse matrix'
-        self.rp_map = rp_map
-
 
     #____ DATA LOADING FUNCTIONS _____
 
@@ -91,44 +81,28 @@ class LISA_Core:
 
         all_genes = gene_selection.GeneSet()
         
-        with open(_config.get('genes','master_gene_list').format(package_path = PACKAGE_PATH, species = self.species), 'r') as genes:
+        with open(self._config.get('genes','master_gene_list').format(package_path = PACKAGE_PATH, species = self.species), 'r') as genes:
             all_genes.from_str(genes.read())
 
-        with open(_config.get('genes','gene_locs').format(package_path = PACKAGE_PATH, species = self.species), 'r') as f:
+        with open(self._config.get('genes','gene_locs').format(package_path = PACKAGE_PATH, species = self.species), 'r') as f:
             rp_map_locs = np.array([line.strip() for line in f.readlines()])
 
         self.all_genes, self.rp_map_locs = all_genes, rp_map_locs
 
         return self.all_genes, self.rp_map_locs
         
-    def _load_factor_binding_data(self, data_object):
-
-        self.factor_dataset_ids = list(data_object[_config.get('accessibility_assay','reg_potential_dataset_ids')\
-            .format(technology = self.isd_method)][...].astype(str))
+    def _load_factor_binding_data(self, window_size = 1000):
+    
+        with open(self._config.get('factor_binding','dataset_ids').format(package_path = PACKAGE_PATH, species = self.species, technology = self.isd_method), 'r') as f:
+            self.factor_dataset_ids = [x.strip() for x in f.readlines()]
         
-        self.factor_binding = sparse.load_npz(_config.get('factor_binding','matrix').format(package_path = PACKAGE_PATH, species = self.species, technology = self.isd_method))
+        self.factor_binding = sparse.load_npz(self._config.get('factor_binding','matrix').format(package_path = PACKAGE_PATH, species = self.species, 
+            technology = self.isd_method, window = str(window_size)))
 
         return self.factor_binding, self.factor_dataset_ids
 
     def _load_rp_map(self):
-        if isinstance(self.rp_map, str):
-            #self.rp_map = sparse.load_npz(_config.get('RP_map','matrix').format(package_path = PACKAGE_PATH, species = self.species, style = self.rp_map)).tocsr()
-            rp_map_name_params = dict(species = self.species, version = REQURED_DATASET_VERSION, name = self.rp_map)
-            
-            rp_map_path = _config.get('paths','rp_map').format(package_path = PACKAGE_PATH, **rp_map_name_params)
-            
-            if not os.path.exists(rp_map_path):
-                try:
-                    self.fetch_from_cistrome(_config.get('downloads', 'rp_maps')\
-                        .format(**rp_map_name_params), rp_map_path, is_tar=False)
-                except error.URLError as err:
-                    self.log.append('Cannot connect to cistrome server, or cistrome server does not have the RP map requested. \nDefaulting to "basic" RP map instead.')
-                    rp_map_name_params['name'] = 'basic'
-                    rp_map_path = _config.get('paths','rp_map').format(package_path = PACKAGE_PATH, **rp_map_name_params)
-            
-            self.rp_map = sparse.load_npz(rp_map_path).tocsr()
-
-        return self.rp_map
+        raise NotImplementedError()
 
     def _load_data(self):
 
@@ -142,10 +116,8 @@ class LISA_Core:
             log.append('Loading regulatory potential map ...')
             self._load_rp_map()
 
-            with h5.File(self.data_source, 'r') as data:
-
-                with log.section('Loading binding data ...') as log:
-                    self._load_factor_binding_data(data)
+            with log.section('Loading binding data ...') as log:
+                self._load_factor_binding_data()
 
             self.factor_metadata = self.link_metadata(self.isd_method).select(self.factor_dataset_ids)
 
@@ -154,8 +126,8 @@ class LISA_Core:
         self._is_loaded = True
 
     def link_metadata(self, technology):
-        return Metadata(_config.get('metadata', technology).format(package_path = PACKAGE_PATH, species = self.species, technology = technology),
-                    _config.get('metadata',technology+'_headers').split(','))
+        return Metadata(self._config.get('metadata', technology).format(package_path = PACKAGE_PATH, species = self.species, technology = technology),
+                    self._config.get('metadata',technology+'_headers').split(','))
 
     #____ DATA DOWNLOADING FUNCTIONS ____
 
@@ -166,7 +138,7 @@ class LISA_Core:
 
         else:
             try:
-                with open(_config.get('paths','dataset_version').format(package_path = PACKAGE_PATH, species = self.species), 'r') as v:
+                with open(self._config.get('paths','dataset_version').format(package_path = PACKAGE_PATH, species = self.species), 'r') as v:
                     dataset_version = v.read().strip()
 
                 if not REQURED_DATASET_VERSION == dataset_version:
@@ -201,7 +173,7 @@ class LISA_Core:
         return True
 
     def get_dataset_url(self):
-        return _config.get('downloads','dataset').format(species = self.species, version = REQURED_DATASET_VERSION)
+        return self._config.get('downloads','dataset').format(species = self.species, version = REQURED_DATASET_VERSION)
 
     def download_data(self):
 
@@ -325,15 +297,23 @@ class LISA_Core:
     def add_assay(self, assay):
         self.assays.append(assay)
 
-    def _run_assays(self, gene_mask, label_vector):
-
-        with h5.File(self.data_source, 'r') as data:
+    def _run_assays(self, gene_mask, label_vector, *args, **kwargs):
+        
+        try:
+            try:
+                data = h5.File(self.data_source, 'r')
+            except AttributeError:
+                data = None
             #run each assay specified in the _load_data step. Each assay returns a p_value for each factor binding sample, and returns metadata
             #each assay takes the same arguments and makes the same returns but can perform different tests
             assay_pvals, assay_info = {},{}
             for assay in self.assays:
-                assay_pvals[assay.technology + '_p_value'] = assay.predict(gene_mask, label_vector, data)
+                assay_pvals[assay.technology + '_p_value'] = assay.predict(gene_mask, label_vector, *args, data_object = data, **kwargs)
                 assay_info[assay.technology] = assay.get_info()
+
+        finally:
+            if not data is None:
+                data.close()
 
         return assay_pvals, assay_info
 
@@ -414,18 +394,19 @@ class LISA_Core:
 
 
     #___ CLASS PREDICTION FUNCTION (USER INTERFACE) ___
-    def predict(self, query_list, background_list = [], background_strategy = 'regulatory', num_background_genes = 3000, seed = 2556):
+    def predict(self, query_list, *args, background_list = [], background_strategy = 'regulatory', num_background_genes = 3000, seed = 2556, **kwargs):
         
         try:
             self._initialize_resources()
 
             if len(self.assays) == 0:
                 #the initialize assay section is the mutable section for each interface
-                self._initialize_assays()
+                self._initialize_assays(config = self._config, log = self.log,
+                    rp_map = self.rp_map, factor_binding = self.factor_binding)
 
             gene_mask, label_vector, gene_info_dict = self._choose_genes(query_list, background_list, background_strategy, num_background_genes, seed)
 
-            assay_pvals, assay_info = self._run_assays(gene_mask, label_vector)
+            assay_pvals, assay_info = self._run_assays(gene_mask, label_vector, *args, **kwargs)
 
             summary_p_value = self._summarize_p_values(assay_pvals)
 

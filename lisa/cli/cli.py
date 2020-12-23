@@ -1,5 +1,7 @@
-from lisa import LISA, Log, _config, __version__, __file__
-from lisa.lisa_core import INSTALL_PATH
+from lisa.lisa_public_data.lisa import LISA
+from lisa.core.utils import Log
+from lisa._version import __version__
+from lisa.core.lisa_core import INSTALL_PATH
 import configparser
 import argparse
 import os
@@ -7,7 +9,10 @@ import sys
 import json
 from collections import defaultdict
 from shutil import copyfile
-import lisa.test_cli as tests
+import lisa.cli.test_cli as tests
+
+from lisa.lisa_public_data.lisa import _config as public_config
+from lisa.lisa_user_data.lisa import _config as user_config
 
 #____COMMAND LINE INTERFACE________
 
@@ -206,10 +211,10 @@ def lisa_backcompatible(args):
     make_original_csv_format(args.prefix + '.' + original_isd_names[args.isd_method] + '_direct.p_value.csv', results, lisa.isd_method+'_p_value')
     make_original_csv_format(args.prefix + '_' + original_isd_names[args.isd_method] + '_cauchy_combine_raw.csv', results, 'summary_p_value')
 
-    make_model_dataframe(args.prefix + '.DNase.coefs.csv','DNase_model_info',metadata)
-    make_model_dataframe(args.prefix + '.H3K27ac.coefs.csv','H3K27ac_model_info',metadata)
+    make_model_dataframe(args.prefix + '.DNase.coefs.csv','DNase',metadata)
+    make_model_dataframe(args.prefix + '.H3K27ac.coefs.csv','H3K27ac',metadata)
 
-    make_summary_table(args.prefix + '.combined.' + original_isd_names[args.isd_method] + '.csv', results)
+    #make_summary_table(args.prefix + '.combined.' + original_isd_names[args.isd_method] + '.csv', results)
 
 def run_tests(args):
 
@@ -262,7 +267,7 @@ X. Shirley Liu Lab, 2020\n
 
     oneshot_parser.add_argument('query_list', type = argparse.FileType('r', encoding = 'utf-8'), help = 'user-supplied gene lists. One gene per line in either symbol or refseqID format')
     oneshot_parser.add_argument('-o','--output_prefix', required = False, type = is_valid_prefix, help = 'Output file prefix. If left empty, will write results to stdout.')
-    oneshot_parser.add_argument('--background_strategy', choices = _config.get('lisa_params', 'background_strategies').split(','),
+    oneshot_parser.add_argument('--background_strategy', choices = public_config.get('lisa_params', 'background_strategies').split(','),
         default = 'regulatory',
         help = """Background genes selection strategy. LISA samples background genes to compare to user\'s genes-of-interest from a diverse
         regulatory background (regulatory - recommended), randomly from all genes (random), or uses a user-provided list (provided).
@@ -270,7 +275,7 @@ X. Shirley Liu Lab, 2020\n
     background_genes_group = oneshot_parser.add_mutually_exclusive_group()
     background_genes_group.add_argument('--background_list', type = argparse.FileType('r', encoding = 'utf-8'), required = False,
         help = 'user-supplied list of backgroung genes. Used when --background_strategy flag is set to "provided"')
-    background_genes_group.add_argument('-b','--num_background_genes', type = int, default = _config.get('lisa_params', 'background_genes'),
+    background_genes_group.add_argument('-b','--num_background_genes', type = int, default = public_config.get('lisa_params', 'background_genes'),
         help = 'Number of sampled background genes to compare to user-supplied genes')
     oneshot_parser.add_argument('-v','--verbose',type = int, default = 4)
     oneshot_parser.set_defaults(func = lisa_oneshot)
@@ -280,7 +285,7 @@ X. Shirley Liu Lab, 2020\n
     multi_parser = subparsers.add_parser('multi', help = 'Process multiple genelists. This reduces data-loading time if using the same parameters for all lists.\n')
     build_common_args(multi_parser)
     build_multiple_lists_args(multi_parser)
-    multi_parser.add_argument('-b','--num_background_genes', type = int, default = _config.get('lisa_params', 'background_genes'),
+    multi_parser.add_argument('-b','--num_background_genes', type = int, default = public_config.get('lisa_params', 'background_genes'),
         help = 'Number of sampled background genes to compare to user-supplied genes. These genes are selection from other gene lists.')
     multi_parser.add_argument('--random_background', action = 'store_const', const = 'random', default = 'regulatory', dest = 'background_strategy', help = 'Use random background selection rather than "regulatory" selection.')
     multi_parser.set_defaults(func = lisa_multi, background_list = None)
@@ -318,18 +323,18 @@ X. Shirley Liu Lab, 2020\n
     backcompat_parser.add_argument('--threads', dest = 'cores', required = True, type = int, default = 1)
     backcompat_parser.add_argument('--seed', type = int, default = 2556, help = 'Random seed for gene selection. Allows for reproducing exact results. LISA may be more sensitive to seed when background count is low.')
     backcompat_parser.add_argument('--prefix', required=True, type = is_valid_prefix, help = 'Output file prefix.')
-    backcompat_parser.add_argument('--stat_background_number', dest='num_background_genes', type = int, default = _config.get('lisa_params', 'background_genes'),
+    backcompat_parser.add_argument('--stat_background_number', dest='num_background_genes', type = int, default = public_config.get('lisa_params', 'background_genes'),
         help = 'Number of sampled background genes to compare to user-supplied genes')
     backcompat_parser.add_argument('--background', dest = 'background_list', type = get_background_option, help = 'background genes provided as file, or type of background selection')
     backcompat_parser.add_argument('--method', choices=['knockout', 'chipseq', 'motifs'], dest = 'isd_method', required=True,
         help = 'Use motif hits instead of ChIP-seq peaks to represent TF binding (only recommended if TF-of-interest is not represented in ChIP-seq database).')
     #absorb all old and deprecated flags
-    for flag in 'clean,web,new_rp_h5,new_count,epigenome,cluster,random,covariates'.split(','):
+    for flag in 'clean,web,new_rp_h5,new_count,cluster,random,covariates,new_count_h5'.split(','):
         backcompat_parser.add_argument('--' + flag, required=False, help = 'deprecated option')
     backcompat_parser.add_argument('-v','--verbose',type = int, default = 4)
     backcompat_parser.set_defaults(func = lisa_backcompatible, background_strategy = 'regulatory')
     backcompat_parser.add_argument('--save_metadata', action = 'store_true', default = False, help = 'Save json-formatted metadata from processing each gene list.')
-    
+    parser.add_argument('--epigenome',nargs='+',default=['Direct','H3K27ac','DNase'],dest='assays',choices=['Direct','H3K27ac','DNase'])
     #____ LISA run tests command _______
     test_parser = subparsers.add_parser('run-tests')
     test_parser.add_argument('species', type = str, choices=['hg38','mm10'])
