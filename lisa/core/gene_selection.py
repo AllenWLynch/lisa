@@ -24,6 +24,12 @@ class RefSeqGene(Gene):
             for exon_start, exon_end in zip(exonStarts.split(','), exonEnds.split(','))
                 self.special_regions.append(Region(chrom, exon_start, exon_end))
 
+    def get_exon_regions(self):
+        return self.special_regions
+
+    def add_regions(self, new_regions):
+        self.special_regions.extend(new_regions)
+            
 class Gene:
     '''
     A gene has a unique genomic region, an accepted name, and aliases that also correspond to that gene or genomic region
@@ -113,16 +119,15 @@ class GeneSet:
     '''
 
     @classmethod
-    def from_str(cls, save_str):
+    def from_file(cls, path):
 
         new_geneset = cls()
 
-        lines = save_str.split('\n')
-        #skip header line
-        for line in lines[1:]:
-            location, name, tad, aliases = [x.strip() for x in line.split('\t')]
-            new_gene = Gene(*location.split(':'), aliases.split('|'), tad_domain = tad)
-            new_geneset.add_gene(new_gene)
+        with open(path, 'r') as f:
+            for line in f.readlines()[1:]:
+                location, name, tad, aliases = [x.strip() for x in line.split('\t')]
+                new_gene = Gene(*location.split(':'), aliases.split('|'), tad_domain = tad)
+                new_geneset.add_gene(new_gene)
 
         return new_geneset
 

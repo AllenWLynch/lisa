@@ -74,16 +74,11 @@ class LISA_Core:
     #____ DATA LOADING FUNCTIONS _____
 
     def _load_gene_info(self):
-
-        all_genes = gene_selection.GeneSet()
         
-        with open(self._config.get('genes','master_gene_list').format(package_path = PACKAGE_PATH, species = self.species), 'r') as genes:
-            all_genes.from_str(genes.read())
+        self.all_genes = gene_selection.GeneSet.from_file(self._config.get('genes','master_gene_list').format(package_path = PACKAGE_PATH, species = self.species))
 
         with open(self._config.get('genes','gene_locs').format(package_path = PACKAGE_PATH, species = self.species), 'r') as f:
-            rp_map_locs = np.array([line.strip() for line in f.readlines()])
-
-        self.all_genes, self.rp_map_locs = all_genes, rp_map_locs
+            self.rp_map_locs = np.array([line.strip() for line in f.readlines()])
 
         return self.all_genes, self.rp_map_locs
         
