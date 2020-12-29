@@ -15,7 +15,7 @@ class ISD_Assay(LISA_RP_Assay):
 
         with self.log.section('Modeling insilico deletions:'):
 
-            profile = self.region_scores[:, np.newaxis]
+            profile = (self.region_scores/self.region_scores.sum() * 1e6)[:,np.newaxis]
 
             factor_sums = self.factor_binding.sum(axis = 0)
 
@@ -32,9 +32,13 @@ class ISD_Assay(LISA_RP_Assay):
             self.log.append('Calculating p-values ...')
             p_vals = self.get_delta_RP_p_value(delta_reg_scores, label_vector)
 
+            self.delta_reg_scores = delta_reg_scores
+
         self.log.append('Done!')
 
         return p_vals
 
     def get_info(self):
-        return dict()
+        return dict(
+            delta_regulation_scores = self.delta_reg_scores.tolist()
+        )

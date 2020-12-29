@@ -31,7 +31,7 @@ class PeakRP_Assay(LISA_RP_Assay):
 
         return p_vals
 
-    def get_info(self):
+    def get_info(self, *args):
         return dict()
 
 #Generator that repeatedly yields the same factor_binding and rp_map matrices with a new accessibility profile 
@@ -62,7 +62,8 @@ class Accesibility_Assay(LISA_RP_Assay):
             selection_model = self.selection_model.get_info(),
             chromatin_model = self.chromatin_model.get_info(),
             selected_datasets = self.metadata.select(list(self.selected_dataset_ids)),
-            factor_acc_z_scores = self.factor_acc_z_scores
+            factor_acc_z_scores = self.factor_acc_z_scores,
+            delta_regulation_scores = self.delta_reg_scores.tolist()
         )
 
     def load_accessibility_profiles(self, data_object, selected_dataset_ids):
@@ -175,6 +176,8 @@ class Accesibility_Assay(LISA_RP_Assay):
             self.log.append('Introspecting accessibility around factors ...')
             self.factor_acc_z_scores = self.introsect_accessibility(self.rp_matrix, self.factor_gene_mask, dataset_mask,
                 self.chromatin_model.model.coef_)
+
+            self.delta_reg_scores = delta_reg_scores
 
             self.log.append('Done!')
 

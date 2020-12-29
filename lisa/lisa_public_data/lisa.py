@@ -1,4 +1,4 @@
-
+import os
 from lisa.core.lisa_core import LISA_Core, PACKAGE_PATH, REQURED_DATASET_VERSION
 from lisa.core.lisa_core import CONFIG_PATH as base_config_path
 import lisa.lisa_public_data.assays as assays
@@ -6,29 +6,76 @@ from lisa.lisa_public_data.models import LR_BinarySearch_SampleSelectionModel, L
 import numpy as np
 from scipy import sparse
 import multiprocessing
-import os
 import configparser
-"""
-LISA_Core implements the main methods for results formatting and data loading that make
-up a standard LISA application. Extensions of the core method may instantiate different assays
-depending on the data available to asses TF influence in different ways.
-
-If only expression data is available, the base LISA interface can be instantiated, which 
-will use public data to estimate TF influence.
-"""
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__),'config.ini')
 _config = configparser.ConfigParser()
 _config.read([base_config_path, CONFIG_PATH])
 
 class LISA(LISA_Core):
+    '''
+lisa.FromGenes
+**************
 
-    def __init__(self, species, config = _config, rp_map = 'basic', assays = ['Direct','H3K27ac','DNase'], num_datasets_selected = int(_config.get('lisa_params', 'num_datasets_selected')), cores = 1, **kwargs):
-        super().__init__(species, config, **kwargs)
+Interface for performing LISA test for TF influence using public chromatin accessibility data. Given just a set of genes, LISA will identify a subset of a large database
+of public H3K27ac and DNase profiles that represents a model for multiple chromatin states around those genes. LISA then assesses the influence of TF binding 
+on your genes-of-interest vs a sampling of background genes through through those representative datasets, and aggregates the effects to produce a final p-value.
+
+This model is useful for integrating accessibility and binding data when you have strictly a list of associated genes (from scRNA-seq, for example). If you have 
+genes-of-interest, as well as regions-of-interest, you may use the more specific test provided by ``lisa.FromRegions``.
+
+*Example:*
+
+.. code:: python
+
+    # Read genelist file
+    >>> genes_file = open('./genelist.txt', 'r')
+    >>> genes = [x.strip() for x in genes_file.readlines()]
+    >>> genes_file.close()
+    # Instantiate lisa_regions object. You can pass your regions as a python list of lists, or as the filepath to a bedfile
+    >>> lisa_regions = lisa.FromGenes('hg38', cores = 10, isd_method = 'chipseq')
+    # Run the LISA test on your genelist
+    >>> results, metadata = lisa_regions.predict(genes, num_background_genes = 501)
+    # Print results to stdout
+    >>> print(results.to_tsv())
+
+**For more, see `user guide <docs/user_guide.rst>`_.**
+
+    '''
+
+    @classmethod
+    def document(cls):
+        return cls('hg38').get_docs()
+
+    @classmethod
+    def get_document_link(cls):
+        return "`lisa.FromGenes`_"
+    
+    def __init__(self, species, cores = 1, assays = ['Direct','H3K27ac','DNase'], isd_method = 'chipseq', **kwargs):
+        '''
+**lisa.FromGenes(self, species, cores = 1, assays = ['Direct','H3K27ac','DNase'], isd_method = 'chipseq')**
+    Initialize the LISA test using public data.
+
+    Params
+    ------
+    species : {'hg38', 'mm10'}
+    cores : int 
+        Number of cores to use. For optimal performance, allocate 1, 2, 5, or 10 cores. More cores is faster.
+    assays : list of {"Direct","H3K27ac","DNase"}
+        default is all tests
+    isd_method : {"chipseq", "motifs"}
+        Use ChIP-seq data or motifs to mark TF binding locations.
+    
+    Returns
+    -------
+    lisa object
+        '''
+
+        super().__init__(species, _config, isd_method= isd_method, **kwargs)
         assert(len(assays) > 0), 'Must provide at least one assay to run.'
         assert(all([assay in self._config.get('lisa_params','assays').split(',') for assay in assays])), 'An assay chosen by the user is not a valid choice: \{{}}'.format(self._config.get('lisa_params','assays'))
-        #assert(self.rp_map == 'basic'), 'For base LISA predictor, rp map must be "basic".'
 
+        num_datasets_selected = int(_config.get('lisa_params', 'num_datasets_selected'))
         num_datasets_selected_anova = int(self._config.get('lisa_params','num_datasets_selected_anova'))
 
         assert( isinstance(num_datasets_selected, int) )
@@ -53,6 +100,7 @@ For better efficiency, make #datasets a multiple of #cores.'''.format(self.cores
 
         self.schedule_assays = sorted(list(set(assays)))
 
+        rp_map = 'basic'
         if isinstance(rp_map, str):
             rp_map_styles = self._config.get('lisa_params','rp_map_styles').split(',')
             assert(rp_map in rp_map_styles), 'RP map must be numpy/scipy.sparse array, or be one of provided maps: {}'.format(','.join(rp_map_styles))
@@ -97,7 +145,7 @@ For better efficiency, make #datasets a multiple of #cores.'''.format(self.cores
         return self.rp_map
 
 
-    def get_factor_gene_mask(self):
+    def _get_factor_gene_mask(self):
 
         factor_genes = self.all_genes.match_user_provided_genes(self.factor_metadata['factor'])
 
@@ -126,7 +174,7 @@ For better efficiency, make #datasets a multiple of #cores.'''.format(self.cores
         try: # if factor gene mask not instantiated
             self.factor_gene_mask
         except AttributeError:
-            self.get_factor_gene_mask()
+            self._get_factor_gene_mask()
 
         for assay in self.schedule_assays:
             if assay == 'Direct':
@@ -148,3 +196,33 @@ For better efficiency, make #datasets a multiple of #cores.'''.format(self.cores
                 )
             else:
                 raise AssertionError('Invalid assay encountered: {}'.format(str(assay)))
+
+    def predict(self, query_list, background_list = [], background_strategy = 'regulatory', num_background_genes = 3000, seed = 2556):
+        '''
+    **self.predict(self, query_list, background_list = [], background_strategy = 'regulatory', num_background_genes = 3000, seed = 2556)**
+        Predict TF influence given a set of genes.
+        
+        Params
+        ------
+        query_list : list
+            Genes-of-interest, in either Symbol of RefSeqID format. Must provide between 20 to 500 genes.
+        background_list : list
+            User-specified list of background genes to compare with query_list. Must contain more genes than query list and entire list will be used. If provided, ```background_strategy``` must be set to "provided".
+        background_strategy : {"regulatory","random","provided"}
+            Regulatory will sample background genes from a stratified sample of TADs and regulatory states, random will randomly sample from all non-query genes.
+        num_background_genes : int
+            Number of genes to use as comparison to query genes. More background genes make test slower, but more stable.
+        seed : int
+            Seed for gene selection and regression model initialization.
+
+        Returns
+        -------
+        results
+            Dictionary with each key representing a table column, sorted by "summary_p_value" field. The dictionary can be passed directly to a the pandas constructor: ``results_df = pd.DataFrame(results.todict())``.
+        metadata
+            Dictionary with test metadata. Includes query genes provided and background genes that were selected. This metadata dict also contains information on the accessibility datasets that were selected to represent the chromatin landscape around you genes-of-interest, for example, the tissue and cell line from which the profiles were derived.
+        
+        '''
+
+        super().predict(query_list, background_list=background_list, background_strategy=background_strategy, 
+            num_background_genes= num_background_genes, seed=seed)

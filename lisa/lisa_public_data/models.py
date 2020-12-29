@@ -11,6 +11,7 @@ for the selection of discriminative datasets, and the training of an accurate ch
 
 Users may extend the SampleSelectionModel or ChromatinModel class to define new behavior for Lisa.
 """
+PSEUDOCOUNT = 0.1
 
 from sklearn.base import BaseEstimator
 from sklearn.model_selection import GridSearchCV
@@ -92,7 +93,7 @@ class LR_BinarySearch_SampleSelectionModel(SampleSelectionModel):
         # Normalize with mean centering and log transformation
         index_array = np.arange(rp_matrix.shape[1])
 
-        X = StandardScaler(with_std = False).fit_transform( np.log2(rp_matrix + 1) )
+        X = StandardScaler(with_std = False).fit_transform( np.log2(rp_matrix + PSEUDOCOUNT) )
 
         #narrow features with anova selection
         anova_featues = SelectKBest(f_classif, k=self.num_anova_features).fit(X, labels).get_support()
@@ -143,7 +144,7 @@ class LR_ChromatinModel(ChromatinModel):
 
         self.normalizer = StandardScaler(with_std = False)
 
-        X0 = self.normalizer.fit_transform( np.log2(self.rp_0 + 1)  )
+        X0 = self.normalizer.fit_transform( np.log2(self.rp_0 + PSEUDOCOUNT)  )
 
         #define a classifier for query vs background genes
         classifier = LogisticRegression(penalty = self.penalty, solver = 'lbfgs' if self.penalty == 'l2' else 'liblinear', random_state = 777)
@@ -161,7 +162,7 @@ class LR_ChromatinModel(ChromatinModel):
         this method must implement a transformation into a genes x TFs matrix, sumarrizing the dataset-axis effects
         """
         #subtract define deltaX to be the log2 of the fraction of knocked-out RP
-        deltaX = np.log2(self.rp_0[:,:,np.newaxis] - rp_knockout + 1) - np.log2(self.rp_0[:,:,np.newaxis] + 1)
+        deltaX = np.log2(self.rp_0[:,:,np.newaxis] - rp_knockout + PSEUDOCOUNT) - np.log2(self.rp_0[:,:,np.newaxis] + PSEUDOCOUNT)
         
         #flip sign so that more knockout = more deltaR
         return -1 * deltaX.transpose(0,2,1).dot(self.model.coef_.reshape(-1))

@@ -31,10 +31,7 @@ class DownloadRequiredError(BaseException):
     pass
 
 class LISA_Core:
-    '''
-    The LISA object is the user's interface with the LISA algorithm. It holds the parameters specified by the user and 
-    handles data loading from hdf5
-    '''
+    
     #class dictionary, converts cmd line alias to standard symbols for knockout methods
     factor_binding_technologies = dict(
         chipseq = 'ChIP-seq',
@@ -53,8 +50,7 @@ class LISA_Core:
         self.isd_options = self._config.get('lisa_params', 'isd_methods').split(',')
         self.background_options = self._config.get('lisa_params', 'background_strategies').split(',')
         self.max_query_genes = int(self._config.get('lisa_params', 'max_user_genelist_len'))
-        
-        assert( isd_method in  self.isd_options ), 'ISD method must be \{{}}'.format(', '.join(self.isd_options))
+        assert( isd_method in  self.isd_options ), 'ISD method must be ({})'.format(', '.join(self.isd_options))
         assert( species in ['mm10','hg38'] ), "Species must be either hg38 or mm10"
         
         self.isd_method = self.factor_binding_technologies[isd_method]
@@ -243,33 +239,27 @@ class LISA_Core:
 
         return query_genes, background_genes
 
-    @staticmethod
-    def create_label_dictionary(query_list, background_list):
-        return { #this dict is used to create label vector for LISA algo
-            gene.get_location() : int(i < len(query_list))
-            for i, gene in enumerate(list(query_list) + list(background_list))
-        }, dict( #return this dict for results (purely informational)
-            query_symbols = query_list.get_symbols(),
-            background_symbols = background_list.get_symbols(),
-            query_locations = query_list.get_locations(),
-            background_locations = background_list.get_locations(),
-        )
-
     def _make_gene_mask(self, query_genes, background_genes):
 
-        label_dict, gene_info_dict = self.create_label_dictionary(query_genes, background_genes)
+        label_dict = { 
+            gene.get_location() : (int(i < len(query_genes)), gene.get_name())
+            for i, gene in enumerate(list(query_genes) + list(background_genes))
+        }
 
-        #Show user number of query and background genes selected
-        self.log.append('Selected {} query genes and {} background genes.'\
-            .format(str(len(gene_info_dict['query_symbols'])), str(len(gene_info_dict['background_symbols']))))
+        gene_mask, gene_names, label_vector = [],[],[]
+        for loc in self.rp_map_locs:
+            gene_mask.append(loc in label_dict)
+            if loc in label_dict:
+                label_vector.append(label_dict[loc][0])
+                gene_names.append(label_dict[loc][1])
 
-        #subset the rp map for those genes and make label vector
-        gene_mask = np.isin(self.rp_map_locs, list(label_dict.keys()))
-        #make label vector from label_dict based of gene_loc ordering in rp_map data
-        label_vector = np.array([label_dict[gene_loc] for gene_loc in self.rp_map_locs[gene_mask]])
+        return np.array(gene_mask), np.array(label_vector), dict(
+            query_symbols = query_genes.get_symbols(),
+            background_symbols = background_genes.get_symbols(),
+            gene_name_order = gene_names,
+            is_query = label_vector,
+        )
         
-        return gene_mask, label_vector, gene_info_dict
-
     #KEYSTONE FUNCTION FOR GENE SELECTION
     def _choose_genes(self, query_list, background_list = [], background_strategy = 'regulatory', num_background_genes = 3000, seed = None):
         #validate user args
@@ -375,7 +365,8 @@ class LISA_Core:
         #return model_metadata as big dictionary
         return results, dict(
             **gene_info_dict,
-            **assay_info
+            **assay_info,
+            factor_dataset_ids = self.factor_dataset_ids,
         )
 
     def _summarize_p_values(self, assay_pvals):
@@ -414,3 +405,10 @@ class LISA_Core:
 
         except (FileNotFoundError, OSError):
             raise DownloadRequiredError('Data is malformed or incomplete, run "lisa download [species]" to redownload dataset')
+
+    def get_docs(self):
+        return '\n'.join([
+            self.__doc__,
+            self.__init__.__doc__,
+            self.predict.__doc__]
+        )

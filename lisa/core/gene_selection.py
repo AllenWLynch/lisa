@@ -4,6 +4,25 @@ import os
 import random
 from collections import Counter, defaultdict, OrderedDict
 import random
+from lisa.lisa_user_data.genome_tools import Region
+
+class RefSeqGene(Gene):
+
+    promoter_width_from_tss = 1500
+
+    def __init__(self, bin,	name, chrom, strand,
+        txStart, txEnd, cdsStart, cdsEnd, exonCount, exonStarts, exonEnds	
+        score, symbol, cdsStartStat, cdsEndStat, exonFrames):
+        
+        if strand == '-':
+            tss = (txEnd, txEnd + 1)
+        else:
+            tss = (txStart, txStart + 1)
+        super().__init__(chrom, *tss, [upper(symbol), upper(name)])
+        self.special_regions = [Region(chrom, *tss).slop(promoter_width_from_tss)]
+        if exonStarts != '' and exonEnds != '':
+            for exon_start, exon_end in zip(exonStarts.split(','), exonEnds.split(','))
+                self.special_regions.append(Region(chrom, exon_start, exon_end))
 
 class Gene:
     '''
@@ -51,7 +70,6 @@ class Gene:
     def __str__(self):
         return self.get_name()
 
-
     def get_RP_signature(self, bins, bin_index, delta = 10000, max_influence_distance = 100000):
 
         tss = self.start
@@ -94,6 +112,30 @@ class GeneSet:
         Primary organization should be by genomic location
     '''
 
+    @classmethod
+    def from_str(cls, save_str):
+
+        new_geneset = cls()
+
+        lines = save_str.split('\n')
+        #skip header line
+        for line in lines[1:]:
+            location, name, tad, aliases = [x.strip() for x in line.split('\t')]
+            new_gene = Gene(*location.split(':'), aliases.split('|'), tad_domain = tad)
+            new_geneset.add_gene(new_gene)
+
+        return new_geneset
+
+    @classmethod
+    def from_refseq(cls, path):
+        
+        new_geneset = cls()
+        with open(path, 'r') as f:
+            for line in f.readlines()[1:]:
+                new_geneset.add_gene(*[x.strip() for x in line.strip().split('\t')])
+
+        return new_geneset
+            
     def __init__(self):
         self.genes_by_name = defaultdict(list)
         self.genes_by_chr = OrderedDict()
@@ -112,6 +154,12 @@ class GeneSet:
             existing_gene = self.genes_by_chr[new_gene.get_location()]
             #adds the new names to the existing object for this genomic location / gene
             existing_gene.add_aliases(new_gene.aliases)
+
+            try:
+                existing_gene.add_regions(new_gene.special_regions)
+            except AttributeError:
+                pass
+
             #adds pointers from these names to the existing gene
             for alias in new_gene.aliases:
                 #if this alias is not registered
@@ -160,17 +208,6 @@ class GeneSet:
 
     def __str__(self):
         return '\t'.join(['location','gene_name','tad_domain','aliases']) + '\n' + '\n'.join([repr(gene) for gene in self.genes_by_chr.values()])
-
-    def from_str(self, save_str):
-
-        lines = save_str.split('\n')
-        #skip header line
-        for line in lines[1:]:
-            location, name, tad, aliases = [x.strip() for x in line.split('\t')]
-            new_gene = Gene(*location.split(':'), aliases.split('|'), tad_domain = tad)
-            self.add_gene(new_gene)
-
-        return self
 
 
     def get_genes_by_chrom(self, chromosome):

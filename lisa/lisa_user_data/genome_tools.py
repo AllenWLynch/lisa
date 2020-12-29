@@ -62,8 +62,8 @@ class Genome:
         return cls(chromosomes, lengths, window_size= window_size)
 
     def __init__(self, chromosomes, lengths, window_size = 100):
+        
         self.window_size = int(window_size)
-
         self.chromosomes, self.lengths = chromosomes, lengths
 
         self.lengths = list(map(int, self.lengths))
@@ -197,7 +197,7 @@ class RegionSet:
         start_idx, end_idx = self.chrom_indptr[chrom]
         return self.regions[start_idx : end_idx]
 
-    def distance_intersect(self, regions, distance_function, max_distance = 1e5):
+    def map_intersects(self, regions, distance_function = lambda x, y : 1, slop_distance = 1e5):
 
         assert(isinstance(max_distance, (float, int)))
         assert(isinstance(regions, RegionSet))
@@ -208,8 +208,8 @@ class RegionSet:
             for chrom2 in regions.chrom_order:
                 submatrix_shape = (self.chrom_counts[chrom1], regions.chrom_counts[chrom2])
                 if chrom1 == chrom2:
-                    i_endpoints = get_endpoints(self.get_regions_by_chrom(chrom1), max_distance, self.genome, 'i')
-                    j_endpoints = get_endpoints(regions.get_regions_by_chrom(chrom1), max_distance, self.genome, 'j')
+                    i_endpoints = get_endpoints(self.get_regions_by_chrom(chrom1), slop_distance, self.genome, 'i')
+                    j_endpoints = get_endpoints(regions.get_regions_by_chrom(chrom1), slop_distance, self.genome, 'j')
                     interaction_pairs = get_pairs(i_endpoints, j_endpoints, distance_function)
                     i,j,data = list(zip(*interaction_pairs))
                     sparse_subsections.append(sparse.csr_matrix((data, (i,j)), shape = submatrix_shape))
