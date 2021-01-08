@@ -57,6 +57,7 @@ Example::
     >>> results_df = pd.DataFrame(results.to_dict())
 
 **For more, see `User Guide <docs/user_guide.rst>`_.**
+
     '''
 
     @classmethod
