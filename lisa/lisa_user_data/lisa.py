@@ -1,14 +1,18 @@
 
-from lisa.core.lisa_core import LISA_Core, PACKAGE_PATH
+from lisa.core.lisa_core import LISA_Core
+from lisa.core.data_interface import PACKAGE_PATH, REQURED_DATASET_VERSION
 from lisa.core.lisa_core import CONFIG_PATH as base_config_path
+from lisa.core import gene_selection
 import numpy as np
 import multiprocessing
 from scipy import sparse
-from lisa.lisa_user_data import genome_tools
+from lisa.core import genome_tools
 import os
 import configparser
 from collections.abc import Iterable
 from lisa.lisa_user_data.assays import ISD_Assay
+from lisa.core.data_interface import DataInterface
+from collections import Counter
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__),'config.ini')
 _config = configparser.ConfigParser()
@@ -37,9 +41,7 @@ custom genes x regions matrix, where every region's influence is mapped to every
 
 This interface outputs results in the same format as the ``FromGenes`` interface.
 
-*Example:*
-
-.. code:: python
+Example::
 
     # Read genelist file
     >>> genes_file = open('./genelist.txt', 'r')
@@ -51,40 +53,165 @@ This interface outputs results in the same format as the ``FromGenes`` interface
     >>> results, metadata = lisa_regions.predict(genes, num_background_genes = 501)
     # Print results to stdout
     >>> print(results.to_tsv())
+    # Get results as pandas DataFrame
+    >>> results_df = pd.DataFrame(results.to_dict())
 
 **For more, see `User Guide <docs/user_guide.rst>`_.**
-
     '''
 
     @classmethod
-    def document(cls):
-        return cls('mm10', [('chr1',100,200)]).get_docs()
+    def get_docs(cls):
+        return '\n'.join(x.__doc__ for x in 
+        [cls, cls.using_bedfile, cls.using_macs_output, cls.__init__, cls.predict])
 
-    def __init__(self, species, regions, region_scores = None, rp_map = 'basic', rp_decay = 10000, isd_method = 'chipseq', **kwargs):
+    window_size = 100
+
+
+    @classmethod
+    def parse_macs_file(cls, path):
+
+        with open(path, 'r') as bed:
+            lines = bed.readlines()
+
+        region_fields = []
+        region_scores = []
+        found_header = False
+        for line in lines:
+            if found_header:
+                line = line.split('\t')
+                assert(len(line) == 10), 'Correctly-formatted MACS2 .xls files have 10 fields.'
+                region_fields.append(line[:3])
+                region_scores.append(line[5])
+            elif not line[0] == "#" and line[:3] == 'chr':
+                line = line.split('\t')
+                assert(len(line) == 10), 'Correctly-formatted MACS2 .xls files have 10 fields.'
+                found_header = True
+
+        return region_fields, region_scores
+
+    @classmethod
+    def parse_bedfile(cls, path, header):
+        with open(path, 'r') as bed:
+            lines = bed.readlines()
+
+        region_fields, region_scores = [],[]
+        num_fields = len(lines[0].split('\t'))
+        assert(num_fields in [3,4]), 'Bedfile must have only three columns (chr,start,end) or four (chr,start,end,score)'
+
+        for i, line in enumerate(lines[(1 if header else 0) : ]):
+            
+            line = line.strip().split('\t')
+            if len(line) != num_fields:
+                raise AssertionError('Error at line #{}: expected {} fields, got {}'\
+                    .format(str(i), str(num_fields), str(len(line))))
+            
+            region_fields.append(line[:3])
+            if num_fields == 4:
+                region_scores.append(line[-1])
+            elif num_fields == 3:
+                region_scores.append(1)
+
+        return region_fields, region_scores
+
+    @classmethod
+    def using_macs_output(cls, species, xls_path, query_genes, rp_map = 'enhanced', rp_decay = 10000, isd_method = 'chipseq', 
+            background_list = [], background_strategy = 'regulatory', num_background_genes = 3000, seed = 2556, header = False, verbose = 4, log = None):
         '''
-**lisa.FromRegions(self, species, regions, region_scores = None, rp_map = 'basic', rp_decay = 10000, isd_method = 'chipseq')**
+        *classmethod*
+        **lisa.FromRegions.using_macs_output(species, xls_path, query_genes, rp_map = 'enhanced', rp_decay = 10000, isd_method = 'chipseq', background_list = [], background_strategy = 'regulatory', num_background_genes = 3000, seed = 2556, header = False, verbose = 4, log = None)**
+        
+        Use regions defined in MACS .xls file, and take the "pileup" field to be the region's score. 
+        All arguments are the same as the "using_bedfile" method, except user must pass "xls_path" as path to MACS2 "{name}.xls" file.
+        Header parameter has no effect.
+        '''
+
+        region_fields, region_scores = cls.parse_macs_file(xls_path)
+        
+        lisa = cls(species, region_fields, rp_map = rp_map, rp_decay=rp_decay, isd_method=isd_method, verbose=verbose, log=log)
+
+        return lisa.predict(query_genes, region_scores = region_scores, background_list=background_list, 
+            background_strategy=background_strategy, num_background_genes=num_background_genes, seed=seed)
+
+    @classmethod
+    def using_bedfile(cls, species, path, query_genes, rp_map = 'enhanced', rp_decay = 10000, isd_method = 'chipseq', 
+            background_list = [], background_strategy = 'regulatory', num_background_genes = 3000, seed = 2556, header = False, verbose = 4, log = None):
+        '''
+    *classmethod*
+    **lisa.FromRegions.using_bedfile(cls, species, path, query_genes, rp_map = 'basic', rp_decay = 10000, isd_method = 'chipseq', background_list = [], background_strategy = 'regulatory', num_background_genes = 3000, seed = 2556, header = False, verbose = 4, log = None)**
+    
+    Run LISA FromRegions test using a bedfile.
+
+    Params
+    ------
+    species : {'hg38', 'mm10'}
+    path : str
+        Path to tab-delineated bedfile with columns: chr start end [score]
+        The score column is optional.
+    query_genes : list
+        Genes-of-interest, in either Symbol of RefSeqID format. Must provide between 20 to 500 genes.
+    rp_map : {"basic", "enhanced"}, scipy.sparse_matrix
+        RP map type, currently supports "basic" and "enhanced". User may also pass their own RP map as scipy.sparse_matrix in the shape (genes x regions)
+    rp_decay : float, int
+        Decay rate of region influence on gene based on distance from TSS. Increase to prioritize distal regions, decrease to prioritize promoters. Default of 10000 bp is balanced.
+    isd_method : {"chipseq", "motifs"} 
+        Use ChIP-seq data or motifs to mark TF binding locations.
+    background_list : list
+        User-specified list of background genes to compare with query_list. Must contain more genes than query list and entire list will be used. If provided, "background_strategy" must be set to "provided".
+    background_strategy : {"regulatory","random","provided"}
+        Regulatory will sample background genes from a stratified sample of TADs and regulatory states, random will randomly sample from all non-query genes.
+    num_background_genes : int
+        Number of genes to use as comparison to query genes. More background genes make test slower, but more stable.
+    seed : int
+        Seed for gene selection and regression model initialization.
+    header : bool
+        Skip first line of bedfile
+    verbose: int
+        Number of levels of log messages to print to stderr
+
+    Returns
+    -------
+    results
+        lisa.core.utils.LISA_Results with each key representing a table column, sorted by "summary_p_value" field. The dictionary can be passed directly to a the pandas constructor: ``results_df = pd.DataFrame(results.to_dict())``.
+    metadata 
+        Dictionary with test metadata. Includes query genes provided and background genes that were selected.
+        '''
+    
+        assert(type(header) == bool)
+
+        region_fields, region_scores = cls.parse_bedfile(path, header)
+
+        lisa = cls(species, region_fields, rp_map = rp_map, rp_decay=rp_decay, isd_method=isd_method, verbose=verbose, log=log)
+
+        return lisa.predict(query_genes, region_scores = region_scores, background_list=background_list, 
+            background_strategy=background_strategy, num_background_genes=num_background_genes, seed=seed)
+
+
+    def __init__(self, species, regions, rp_map = 'basic', rp_decay = 10000, isd_method = 'chipseq', verbose = 4, log = None):
+        '''
+    **lisa.FromRegions(species, regions, rp_map = 'basic', rp_decay = 10000, isd_method = 'chipseq', verbose = 4, log = None)**
+    
     Initialize the LISA test using user-defined regions.
 
     Params
     ------
     species : {'hg38', 'mm10'} 
-    regions : list or lists/tuples with format [('chr', start, end[, score]), ... ]
-        User-defined regions. The score column is optional and if not provided, all regions will be given same weight. This parameter may also be the filename of a bed file with the same format.
-    region_scores : list or np.ndarray of shape (len(regions), ) (optional) 
-        Region scores/weights. Must be same length as regions. User may not provide regions with a score column and this parameter at the same time.
-    rp_map : str, list, scipy.sparse_matrix, np.ndarray 
-        RP map type, currently only supports "basic". User may also pass their own RP map of scipy.sparse_matrix or np.ndarry type in the shape (genes x regions)
+    regions : list of lists/tuples with format [('chr', start, end), ... ]
+        User-defined regions. 
+    rp_map : {"basic", "enhanced"}, scipy.sparse_matrix
+        RP map type, currently supports "basic" and "enhanced". User may also pass their own RP map as scipy.sparse_matrix in the shape (genes x regions)
     rp_decay : float, int 
         Decay rate of region influence on gene based on distance from TSS. Increase to prioritize distal regions, decrease to prioritize promoters. Default of 10000 bp is balanced.
     isd_method : {"chipseq", "motifs"} 
         Use ChIP-seq data or motifs to mark TF binding locations.
+    verbose: int
+        Number of levels of log messages to print to stderr
     
     Returns
     -------
-    lisa object
+    lisa.lisa_user_data.lisa.LISA object
         '''
 
-        super().__init__(species, _config, isd_method= isd_method, **kwargs)
+        super().__init__(species, _config, 100, isd_method= isd_method, verbose=verbose, log = log)
 
         if isinstance(rp_map, str):
             rp_map_styles = self._config.get('lisa_params','rp_map_styles').split(',')
@@ -93,139 +220,71 @@ This interface outputs results in the same format as the ``FromGenes`` interface
             assert( isinstance(rp_map, np.ndarry) or isinstance(rp_map, scipy.sparse)), 'RP map must be either numpy ndarry or scipy.sparse matrix'
         self.rp_map = rp_map
 
-        self.genome = genome_tools.Genome.from_file(self._config.get('paths','genomes').format(package_path = PACKAGE_PATH, species = self.species), window_size=100)
+        #self.genome = genome_tools.Genome.from_file(self._config.get('paths','genomes').format(package_path = PACKAGE_PATH, species = self.species), window_size=100)
 
-        if isinstance(regions, str):
-            assert(os.path.isfile(regions)), 'File not found: {}. If providing regions as string, must point to existing tab-delineated bedfile'.format(regions)
-            with open(regions, 'r') as f:
-                regions = [x.strip().split('\t') for x  in f.readlines()]
+        assert(isinstance(regions, (list, tuple))), '"regions" parameter must be list of region tuples in format [ (chr,start,end [,score]), (chr,start,end [,score]) ... ] or name of bed file.'
+        
+        self.log.append('Validation user-provided regions ...')
 
-        else:
-            assert(isinstance(regions, (list, tuple))), '"regions" parameter must be list of region tuples in format [ (chr,start,end [,score]), (chr,start,end [,score]) ... ] or name of bed file.'
+        self.num_regions_supplied = len(regions)
 
-        regions = self._check_region_specification(regions, region_scores)
+        regions = self._check_region_specification(regions)
 
-        self.region_set = genome_tools.RegionSet(regions, self.genome)
+        self.region_set = genome_tools.RegionSet(regions, self.data_interface.genome)
+        self.region_score_map = np.array([r.annotation for r in self.region_set.regions])
 
         assert(isinstance(rp_decay, (int, float)) and rp_decay > 0), 'RP decay parameter must be positive int/float'
         self.rp_decay = rp_decay
 
-    @staticmethod
-    def _check_region_specification(lines, region_scores):
+        assert(len(regions) >= 1000 and len(regions) < 1000000), 'User must provide atleast 1000 reigons, and less than 1 million.'
 
-        def _check_score(score):
-            try:
-                score = float(score)
-                assert(score > 0), 'Region scores must be non-negative'
-                if score == 0:
-                    raise ZeroScoreError()
-                return score
-            except ValueError:
-                raise AssertionError('Cannot cast score: {} to float.'.format(str(score)))
+    def _check_region_specification(self, regions):
 
-        regions = []
-        if not region_scores is None:
-            assert(len(lines) == len(region_scores)), 'Number of regions and number of region scores must be identical.'
-            assert(isinstance(region_scores, (np.ndarray, list))), 'Region scores must be passed as list or numpy array'
-            region_scores = np.array(region_scores)
-            assert(len(region_scores.shape) == 1), 'Region scores must be 1-D array'
-            assert(np.all(region_scores >= 0)), 'Region scores must be non-negative'
-
-        num_fields = len(lines[0])
-        assert(num_fields in [3,4] if region_scores is None else 3), 'Bedfile must have only three columns (chr, start, end), or four columns (chr, start, end, score)\nUser may not provide a bedfile with scores and fill the region_scores parameter at the same time.'
-
-        for line_no, fields in enumerate(lines):
-            assert(num_fields == len(fields)), 'ERROR, region #{}: expected {} fields, got {}'.format(str(line_no), str(num_fields), str(len(fields)))
+        invalid_chroms = Counter()
+        valid_regions = []
+        for i, region in enumerate(regions):
+            assert(isinstance(region, (tuple, list)) and len(region) == 3), 'Error at region #{}: Each region passed must be in format (string \"chr\",int start, int end'\
+                .format(str(i))
             
-            if num_fields == 3:
-                score = 1 if region_scores is None else region_scores[line_no]
-            elif num_fields == 4:
-                score = fields[-1]
-
             try:
-                regions.append(genome_tools.Region(*fields[:3], annotation = _check_score(score)))
-            except ZeroScoreError:
-                pass
+                new_region = genome_tools.Region(*region, annotation = i)
+                self.data_interface.genome.check_region(new_region)
+                valid_regions.append(new_region)
             except ValueError:
-                raise AssertionError('Error at region #{}: Could not coerce positions into integers'.format(str(line_no)))
-
-        assert(len(regions) > 0), 'No regions with positive weights were passed'
+                raise AssertionError('Error at region #{}: Could not coerce positions into integers'.format(str(i)))
+            except genome_tools.NotInGenomeError as err:
+                invalid_chroms[region[0]]+=1
+                #raise AssertionError('Error at region #{}: '.format(str(i+1)) + str(err) + '\nOnly main chromosomes (chr[1-22,X,Y] for hg38, and chr[1-19,X,Y] for mm10) are permissible for LISA test.')
+            except genome_tools.BadRegionError as err:
+                raise AssertionError('Error at region #{}: '.format(str(i+1)) + str(err))
         
-        return regions
-            
-    @staticmethod
-    def _make_basic_rp_map(gene_loc_set, region_set, decay):
+        if len(invalid_chroms) > 0 :
+            self.log.append('WARNING: {} regions encounted from unknown chromsomes: {}'.format(
+                str(sum(invalid_chroms.values())), str(','.join(invalid_chroms.keys()))
+            ))
 
-        distance_matrix = gene_loc_set.map_intersects(region_set, lambda x,y : x.get_genomic_distance(y), slop_distance=50000)
-
-        distance_matrix.data = np.power(2, -distance_matrix.data/decay)
-
-        return distance_matrix.tocsr()
-
-    def _make_enhanced_rp_map(gene_loc_set, region_set, decay):
-
-        #make regions x exons map
-        exons = []
-
-        for loc_key in self.gene_locs:
-            exons.extend(self.all_genes.genes_by_chr[loc_key].get_exon_regions())
-        
-        exons = genome_tools.RegionSet(exons, self.genome)
-        region_exon_map = region_set.map_intersects(exons, slop_distance=0) #REGIONS X EXONS
-
-        #make exons x genes map
-        gene_loc_dict = dict(zip(self.gene_locs, enumerate(len(self.gene_locs))))
-
-        rows, cols = [],[]
-        for row, exon in enumerate(exons.regions):
-            col = gene_loc_dict[exon.annotation]
-            rows.append(row)
-            cols.append(col)
-
-        exon_gene_map = sparse.csc_matrix((np.ones_like(rows), (rows, cols)), shape = (len(exons), len(self.gene_locs)))
-
-        region_exon_map = region_exon_map.dot(exon_gene_map).astype(np.bool)
-
-        not_exon_promoter = 1 - region_exon_map.sum(axis = 1).todense().astype(np.bool)
-
-        basic_rp_map = self._make_basic_rp_map(gene_loc_set, region_set, decay)
-
-        enhanced_rp_map = basic_rp_map.multiply(not_exon_promoter) + region_exon_map
-
-        return enhanced_rp_map
-
-        
+        return valid_regions
+    
     def _load_factor_binding_data(self):
-        self.factor_binding, self.factor_dataset_ids = super()._load_factor_binding_data('100')
 
-        m2m_region_map = np.array(self.region_set.map_genomic_windows()).astype(int)
+        self.factor_binding, self.factor_dataset_ids, self.factor_metadata = self.data_interface.get_binding_data(self.isd_method)
 
-        index_converted = self.factor_binding.tocsc()[m2m_region_map[:,0], ].tocoo()
+        m2m_region_map = np.array(self.region_set.map_genomic_windows(regions_to_bins=False)).astype(int)
 
-        self.factor_binding = sparse.coo_matrix(
-            (index_converted.data, (m2m_region_map[index_converted.row, 1], index_converted.col)), 
-            shape = (len(self.region_set), len(self.factor_dataset_ids))
-        ).tocsr()
+        self.factor_binding = self.data_interface.project_sparse_matrix(self.factor_binding, m2m_region_map, 
+            len(self.region_set), binarize=True)
 
-        self.factor_binding.data = np.ones_like(self.factor_binding.data)
-
-        return self.factor_binding
+        return self.factor_binding, self.factor_dataset_ids, self.factor_metadata
 
     def _load_rp_map(self):
 
         if isinstance(self.rp_map, str):
-
-            gene_loc_set = genome_tools.RegionSet([genome_tools.Region(*x.strip().split(':')) for x in self.rp_map_locs], self.genome)
-
-            self.rp_map_locs = np.array([":".join([r.chromosome, str(r.start), str(r.end)]) for r in gene_loc_set.regions])
-
             if self.rp_map == 'basic':
-                self.rp_map = self._make_basic_rp_map(gene_loc_set, self.region_set, self.rp_decay)
+                self.rp_map = self.data_interface._make_basic_rp_map(self.data_interface.gene_loc_set, self.region_set, self.rp_decay)
             elif self.rp_map == 'enhanced':
-                self.rp_map = self._make_enhanced_rp_map(gene_loc_set, self.region_set, self.rp_decay)
+                self.rp_map = self.data_interface._make_enhanced_rp_map(self.data_interface.gene_loc_set, self.region_set, self.rp_decay)
             else:
                 NotImplementedError()
-        
         else:
             desired_shape = (len(self.rp_map_locs), len(self.regions))
             assert(self.rp_map.shape == desired_shape), 'RP_map must be of shape (n_genes, n_regions): {}'.format(str(desired_shape))
@@ -234,21 +293,22 @@ This interface outputs results in the same format as the ``FromGenes`` interface
 
     def _initialize_assays(self, **assay_kwargs):
 
-        region_scores = np.array([r.annotation for r in self.region_set.regions])
-
         self.add_assay(
-            ISD_Assay(region_scores, **assay_kwargs)
+            ISD_Assay(**assay_kwargs, technology = 'Regions')
         )
 
-    def predict(self, query_list, background_list = [], background_strategy = 'regulatory', num_background_genes = 3000, seed = 2556):
+    def predict(self, query_genes, region_scores = None, background_list = [], background_strategy = 'all', num_background_genes = 3000, seed = 2556):
         '''
-    **self.predict(self, query_list, background_list = [], background_strategy = 'regulatory', num_background_genes = 3000, seed = 2556)**
+        **predict(query_genes, region_scores = None, background_list = [], background_strategy = 'regulatory', num_background_genes = 3000, seed = 2556)**
+        
         Predict TF influence given a set of genes.
         
         Params
         ------
-        query_list : list
+        query_genes : list
             Genes-of-interest, in either Symbol of RefSeqID format. Must provide between 20 to 500 genes.
+        region_scores : list or np.ndarray of shape (len(regions), )
+            Region scores/weights. Must be same length as regions. If not passed, all regions will be given score of 1.
         background_list : list
             User-specified list of background genes to compare with query_list. Must contain more genes than query list and entire list will be used. If provided, ```background_strategy``` must be set to "provided".
         background_strategy : {"regulatory","random","provided"}
@@ -261,10 +321,29 @@ This interface outputs results in the same format as the ``FromGenes`` interface
         Returns
         -------
         results
-            Dictionary with each key representing a table column, sorted by "summary_p_value" field. The dictionary can be passed directly to a the pandas constructor: ``results_df = pd.DataFrame(results.todict())``.
+            lisa.core.utils.LISA_Results with each key representing a table column, sorted by "summary_p_value" field. The results can be passed directly to a the pandas constructor by calling the "to_dict()" command: ``results_df = pd.DataFrame(results.to_dict())``.
         metadata 
             Dictionary with test metadata. Includes query genes provided and background genes that were selected.
         '''
 
-        return super().predict(query_list, background_list=background_list, background_strategy=background_strategy, 
-            num_background_genes= num_background_genes, seed=seed)
+        if region_scores is None:
+            region_scores = np.ones(self.num_regions_supplied)
+
+        else:
+            assert(isinstance(region_scores, (np.ndarray, list))), 'Passed scores must be of type list or numpy.ndarray'
+            assert(len(region_scores) == self.num_regions_supplied), 'Must provided a score for each region passed. Proved {} regions, and {} scores'\
+                .format(str(len(self.region_set)), str(self.num_regions_supplied))
+            
+            try:
+                region_scores = np.array(region_scores).astype(np.float64)
+            except ValueError as err:
+                raise AssertionError('Region score could not be cast to float: ' + str(err))
+
+            assert(len(region_scores.shape) == 1), 'Region scores must be 1-D list or array.'
+            
+            assert(np.all(region_scores >= 0)), 'All scores must be non-negative'
+
+            region_scores = region_scores[self.region_score_map]
+
+        return super().predict(query_genes, background_list=background_list, background_strategy=background_strategy, 
+            num_background_genes= num_background_genes, seed=seed, region_scores = region_scores)

@@ -4,32 +4,9 @@ import os
 import random
 from collections import Counter, defaultdict, OrderedDict
 import random
-from lisa.lisa_user_data.genome_tools import Region
+from lisa.core.genome_tools import Region
 
-class RefSeqGene(Gene):
 
-    promoter_width_from_tss = 1500
-
-    def __init__(self, bin,	name, chrom, strand,
-        txStart, txEnd, cdsStart, cdsEnd, exonCount, exonStarts, exonEnds	
-        score, symbol, cdsStartStat, cdsEndStat, exonFrames):
-        
-        if strand == '-':
-            tss = (txEnd, txEnd + 1)
-        else:
-            tss = (txStart, txStart + 1)
-        super().__init__(chrom, *tss, [upper(symbol), upper(name)])
-        self.special_regions = [Region(chrom, *tss).slop(promoter_width_from_tss)]
-        if exonStarts != '' and exonEnds != '':
-            for exon_start, exon_end in zip(exonStarts.split(','), exonEnds.split(','))
-                self.special_regions.append(Region(chrom, exon_start, exon_end))
-
-    def get_exon_regions(self):
-        return self.special_regions
-
-    def add_regions(self, new_regions):
-        self.special_regions.extend(new_regions)
-            
 class Gene:
     '''
     A gene has a unique genomic region, an accepted name, and aliases that also correspond to that gene or genomic region
@@ -61,6 +38,9 @@ class Gene:
 
     def get_location(self):
         return self.location
+
+    def get_tss_region(self):
+        return Region(self.chrom, self.start, self.end, annotation = self)
     
     def __eq__(self, other):
         if isinstance(other, str):
@@ -110,6 +90,41 @@ class Gene:
         return RP, bin_indices
 
 
+class RefSeqGene(Gene):
+
+    promoter_width_from_tss = 1500
+
+    def __init__(self, name, chrom, strand,
+        txStart, txEnd, exonStarts, exonEnds, symbol, tad_cluster, *, genome):
+
+        if strand == '-':
+            tss = (int(txEnd), int(txEnd) + 1)
+        else:
+            tss = (int(txStart), int(txStart) + 1)
+            
+        super().__init__(chrom, *tss, [symbol.upper(), name.upper()], tad_domain=tad_cluster)
+
+        self.special_regions = dict()
+
+        self.add_region(Region(chrom, *tss).slop(self.promoter_width_from_tss, genome))
+        if exonStarts != '' and exonEnds != '':
+            for exon_start, exon_end in zip(exonStarts.strip(',').split(','), exonEnds.strip(',').split(',')):
+                self.add_region(Region(chrom, exon_start, exon_end))
+
+        self.is_noncoding = name[:3] == "NR_"
+
+    def get_exon_regions(self):
+        return list(self.special_regions.values())
+
+    def add_region(self, region):
+        if not region.to_tuple() in self.special_regions:
+            self.special_regions[region.to_tuple()] = region
+
+    def add_regions(self, new_regions):
+        for new_region in new_regions:
+            self.add_region(new_region)
+
+
 class GeneSet:
     '''
     Enforces gene organization rules: 
@@ -132,12 +147,13 @@ class GeneSet:
         return new_geneset
 
     @classmethod
-    def from_refseq(cls, path):
+    def from_refseq(cls, path, genome):
         
         new_geneset = cls()
         with open(path, 'r') as f:
-            for line in f.readlines()[1:]:
-                new_geneset.add_gene(*[x.strip() for x in line.strip().split('\t')])
+            for line in f.readlines():
+                #print(line.strip().split('\t'))
+                new_geneset.add_gene(RefSeqGene(*[x.strip() for x in line.strip().split('\t')], genome = genome))
 
         return new_geneset
             
@@ -189,7 +205,7 @@ class GeneSet:
     def get_locations(self):
         return [gene.get_location() for gene in self]
 
-    def get_distinct_genes_by_symbol(self, excluding = set()):
+    def get_distinct_genes_by_symbol(self, excluding = set(), exclude_nc_rna = True):
 
         names = self.get_symbols()
 
@@ -197,7 +213,12 @@ class GeneSet:
 
         distinct_genes = GeneSet()
         for dinstinct_name in distinct_names:
-            distinct_genes.add_gene(self.get_gene_by_name(dinstinct_name))
+            add_gene = self.get_gene_by_name(dinstinct_name)
+            try:
+                if not add_gene.is_noncoding:
+                    distinct_genes.add_gene(add_gene)
+            except AttributeError:
+                distinct_genes.add_gene(add_gene)
 
         return distinct_genes
 

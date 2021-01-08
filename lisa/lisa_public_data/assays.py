@@ -1,38 +1,33 @@
 from lisa.core.utils import LoadingBar
-from lisa.core.assays import LISA_RP_Assay, delta_RP_wrapper
+from lisa.core.assays import LISA_RP_Assay, delta_RP_wrapper, transform_RP
 from multiprocessing import Pool
 import numpy as np
 from scipy import stats, sparse
 import os
-from lisa.lisa_public_data.models import UnweightedChromatinModel
 from collections import defaultdict
 
 class PeakRP_Assay(LISA_RP_Assay):
 
-    def __init__(self, *, generate_rp_matrix, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.generate_rp_matrix = generate_rp_matrix
 
     def predict(self, gene_mask, label_vector, data_object = None, debug = False):
 
-        try:
-            self.rp_matrix
-        except AttributeError:
-            if self.generate_rp_matrix or data_object is None:
-                log.append('Generating new RP matrix ...')
-                self.rp_matrix = self.make_rp_matrix(self.factor_binding, self.rp_map)
-            else:
-                self.rp_matrix, _ = self.load_rp_matrix(data_object)
+        subset_factor_binding, _, subset_rp_map = self.make_subset_rp_map(
+            rp_map = self.rp_map, factor_binding = self.factor_binding, 
+            gene_mask = gene_mask, accessibility = self.factor_binding
+        )
+
+        rp_matrix = self.make_rp_matrix(profiles = subset_factor_binding, rp_map = subset_rp_map)
             
         self.log.append('Calculating {} peak-RP p-values ...'.format(self.technology))
+
+        rp_matrix = np.array(rp_matrix.todense())
         
         #calculate p-values by directly applying mannu-test on RP matrix. Subset the RP matrix for genes-of-interest if required
-        p_vals = self.get_delta_RP_p_value(self.rp_matrix[gene_mask, :], label_vector)
+        p_vals = self.get_delta_RP_p_value(rp_matrix, label_vector)
 
-        return p_vals
-
-    def get_info(self, *args):
-        return dict()
+        return p_vals, dict()
 
 #Generator that repeatedly yields the same factor_binding and rp_map matrices with a new accessibility profile 
 #to the multiprocessing pool creator. This reduces data redundancy.
@@ -49,40 +44,29 @@ class KnockoutGenerator:
     
 class Accesibility_Assay(LISA_RP_Assay):
 
-    def __init__(self, *, selection_model, chromatin_model, factor_gene_mask, cores, generate_rp_matrix, **kwargs):
+    def __init__(self, *, selection_model, chromatin_model, factor_gene_mask, cores, rp_map_style, **kwargs):
         super().__init__(**kwargs)
         self.selection_model = selection_model
         self.chromatin_model = chromatin_model
         self.factor_gene_mask = factor_gene_mask
         self.cores = cores
-        self.generate_rp_matrix = generate_rp_matrix
+        self.rp_map_style = rp_map_style
 
-    def get_info(self):
-        return dict(
-            selection_model = self.selection_model.get_info(),
-            chromatin_model = self.chromatin_model.get_info(),
-            selected_datasets = self.metadata.select(list(self.selected_dataset_ids)),
-            factor_acc_z_scores = self.factor_acc_z_scores,
-            delta_regulation_scores = self.delta_reg_scores.tolist()
-        )
-
-    def load_accessibility_profiles(self, data_object, selected_dataset_ids):
+    def load_accessibility_profiles(self, selected_dataset_ids):
 
         loadingbar = LoadingBar('Reading {} data'.format(self.technology), len(selected_dataset_ids), 20)
 
         accessibility_profiles = []
+        metadata = dict()
         for selected_dataset in selected_dataset_ids:
             self.log.append(loadingbar, update_line = True)
-            accessibility_profiles.append(
-                data_object[self.config.get('accessibility_assay','binned_reads')\
-                .format(technology = self.technology, dataset_id = selected_dataset)][...][:,np.newaxis]
-            )
+            profile, sample_metadata = self.data_interface.get_profile(self.technology, selected_dataset)
+            accessibility_profiles.append(profile)
+            metadata.update(sample_metadata)
 
-        accessibility_profiles = np.concatenate(accessibility_profiles, axis = 1)
+        accessibility_profiles = np.hstack(accessibility_profiles)
 
-        return accessibility_profiles
-
-    #iterator for distributing these matrices to multiple cores
+        return accessibility_profiles, metadata
     
 
     def calculate_ISDs(self, accessibility_profiles, factor_binding, rp_map): #enforced kwargs
@@ -96,26 +80,32 @@ class Accesibility_Assay(LISA_RP_Assay):
         """
         self.log.append('Performing in-silico knockouts ...')
 
-        with Pool(self.cores) as p:
-            knockouts = list(p.imap(delta_RP_wrapper, iter(KnockoutGenerator(accessibility_profiles, factor_binding, rp_map))))
-        
+        if self.cores > 1:
+            with Pool(self.cores) as p:
+                knockouts = list(p.imap(delta_RP_wrapper, iter(KnockoutGenerator(accessibility_profiles, factor_binding, rp_map))))
+        else:
+            knockouts = []
+            for x in KnockoutGenerator(accessibility_profiles, factor_binding, rp_map):
+                knockouts.append(delta_RP_wrapper(x))
+
         #concatenate datasets to for gene x TF x datasets shaped matrix
         self.log.append('Calculating Δ regulatory score ...')
+
         datacube = np.concatenate(knockouts, axis = 1)
-
         num_genes, _, num_TFs = datacube.shape
-
         delta_regulation_score = self.chromatin_model.get_deltaRP_activation(datacube)
         
         assert(delta_regulation_score.shape == (num_genes, num_TFs))
 
-        return delta_regulation_score, datacube
+        return delta_regulation_score
+
+    
+    def load_rp_matrix(self):
+        return self.data_interface.get_rp_matrix(self.technology, self.rp_map_style)
 
     def introsect_accessibility(self, rp_matrix, gene_mask, dataset_mask, dataset_coefs):
 
-        #print(rp_matrix.shape, gene_mask.shape, gene_mask.dtype)
-
-        factor_accessiblities = np.log2(rp_matrix[gene_mask, :] + 1)
+        factor_accessiblities = transform_RP(rp_matrix[gene_mask, :])
 
         background_datasets = factor_accessiblities[:, ~dataset_mask]
 
@@ -132,19 +122,14 @@ class Accesibility_Assay(LISA_RP_Assay):
 
         return factor_acc_z_scores
 
-    def predict(self, gene_mask, label_vector, data_object = None, debug = False):
+    def predict(self, gene_mask, label_vector, debug = False):
 
         with self.log.section('Modeling {} purturbations:'.format(self.technology)):
 
             try:
                 self.rp_matrix
             except AttributeError:
-                if self.generate_rp_matrix or data_object is None:
-                    #log.append('Generating new RP matrix ...')
-                    #self.rp_matrix = self.make_rp_matrix(self.factor_binding, self.rp_map)
-                    raise AssertionError('One can only use other RP maps with the "Direct" assay.')
-                else:
-                    self.rp_matrix, self.dataset_ids = self.load_rp_matrix(data_object)
+                self.rp_matrix, self.dataset_ids = self.load_rp_matrix()
 
             subset_rp_matrix = self.rp_matrix[gene_mask, :]
 
@@ -161,23 +146,20 @@ class Accesibility_Assay(LISA_RP_Assay):
                     
             with self.log.section('Calculating in-silico deletions:'):
 
-                accesibility_profiles = self.load_accessibility_profiles(data_object, self.selected_dataset_ids)
+                accesibility_profiles, metadata = self.load_accessibility_profiles(self.selected_dataset_ids)
 
                 subset_accessibility, subset_factor_binding, subset_rp_map = self.make_subset_rp_map(rp_map = self.rp_map, 
                     factor_binding = self.factor_binding, gene_mask = gene_mask, accessibility = accesibility_profiles)
                 
-                delta_reg_scores, datacube = self.calculate_ISDs(subset_accessibility, subset_factor_binding, subset_rp_map)
+                delta_reg_scores = self.calculate_ISDs(subset_accessibility, subset_factor_binding, subset_rp_map)
 
                 self.log.append('Calculating p-values ...')
                 
                 p_vals = self.get_delta_RP_p_value(delta_reg_scores, label_vector)
         
-            
-            self.log.append('Introspecting accessibility around factors ...')
-            self.factor_acc_z_scores = self.introsect_accessibility(self.rp_matrix, self.factor_gene_mask, dataset_mask,
-                self.chromatin_model.model.coef_)
-
-            self.delta_reg_scores = delta_reg_scores
+            #self.log.append('Introspecting accessibility around factors ...')
+            #factor_acc_z_scores = self.introsect_accessibility(self.rp_matrix, self.factor_gene_mask, dataset_mask,
+            #    self.chromatin_model.model.coef_)
 
             self.log.append('Done!')
 
@@ -188,10 +170,10 @@ class Accesibility_Assay(LISA_RP_Assay):
                 subset_rp_matrix = subset_rp_matrix,
                 subset_rp_map = subset_rp_map,
                 subset_factor_binding = subset_factor_binding,
-                datacube = datacube,
                 delta_reg_scores = delta_reg_scores,
                 dataset_mask = dataset_mask,
                 bin_mask = bin_mask,
             )
         else:
-            return p_vals
+            return p_vals, dict(chromatin_model = self.chromatin_model.get_info(), selection_model = self.selection_model.get_info(),
+            selected_dataset_meta = self.data_interface.transpose_metadata(metadata, self.technology))#, factor_acc_z_scores = factor_acc_z_scores)

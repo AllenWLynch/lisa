@@ -1,5 +1,5 @@
 import unittest
-from lisa.lisa_user_data import genome_tools
+from lisa.core import genome_tools
 import numpy as np
 
 class TestRegionObject(unittest.TestCase):
@@ -49,6 +49,26 @@ class TestGenomeObject(unittest.TestCase):
 
     def setUp(self):
         self.genome = genome_tools.Genome(['chr1','chr2','chr3'], [450, 375, 600], window_size=100)
+        
+        self.unsorted_genome = genome_tools.Genome(['chr1','chr3','chr2'],[200, 300, 250], window_size= 100, _sort=False)
+        self.sorted_genome = genome_tools.Genome(['chr1','chr3','chr2'],[200, 400, 250], window_size= 100, _sort=True)
+        
+        self.correct_mapping = np.array([
+            (0,0),
+            (1,1),
+            (2,5), 
+            (3,6),
+            (4,7),
+            (5,2),
+            (6,3),
+            (7,4),
+        ])
+
+    def test_genome_genome_mapping(self):
+
+        self.assertTrue(
+            np.all(self.unsorted_genome.map_genomes(self.sorted_genome) == self.correct_mapping)
+        )
 
     def test_indptr(self):
         self.assertEqual(
@@ -119,6 +139,8 @@ class TestRegionSet(unittest.TestCase):
 
     def setUp(self):
         self.genome = genome_tools.Genome(['chr1','chr2','chr3'], [450, 375, 600], window_size=50)
+        self.scrambled_genome = genome_tools.Genome(['chr1','chr3','chr2'], [450, 600, 375], window_size=50)
+
         self.regions1A = [
             genome_tools.Region('chr1',20,40),
             genome_tools.Region('chr1',30,60),
@@ -157,8 +179,18 @@ class TestRegionSet(unittest.TestCase):
         ])
 
     def test_auto_distancing(self):
-        distance_matrix = genome_tools.RegionSet(self.regions1A, self.genome).distance_intersect(genome_tools.RegionSet(self.regions1B, self.genome), 
-            lambda x,y : x.get_genomic_distance(y), max_distance=180//2)
+        distance_matrix = genome_tools.RegionSet(self.regions1A, self.genome).map_intersects(genome_tools.RegionSet(self.regions1B, self.genome), 
+            lambda x,y : x.get_genomic_distance(y), slop_distance=75)
+
+        self.assertTrue(
+            np.all(np.array(distance_matrix.todense()).astype(int) == self.auto_distancing_truth)
+        )
+
+    def test_auto_distancing_scrambled(self):
+
+        distance_matrix = genome_tools.RegionSet(self.regions1A, self.scrambled_genome)\
+            .map_intersects(genome_tools.RegionSet(self.regions1B, self.scrambled_genome), 
+            lambda x,y : x.get_genomic_distance(y), slop_distance=75)
 
         self.assertTrue(
             np.all(np.array(distance_matrix.todense()).astype(int) == self.auto_distancing_truth)
@@ -166,8 +198,9 @@ class TestRegionSet(unittest.TestCase):
 
     def test_genome_bin_mapping(self):
 
-        m2m_map = genome_tools.RegionSet(self.regions1A, self.genome).map_genomic_windows(min_window_overlap_proportion=0.0)
-    
+        m2m_map = genome_tools.RegionSet(self.regions1A, self.genome)\
+            .map_genomic_windows(min_window_overlap_proportion=0.0, regions_to_bins=False)
+
         self.assertTrue(
             np.all(m2m_map == self.m2m_map_truth)
         )

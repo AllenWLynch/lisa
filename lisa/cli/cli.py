@@ -18,8 +18,9 @@ See the `Python API <docs/python_api.rst>`_ for more in-depth description of tes
 
 from lisa import FromRegions, FromGenes
 from lisa.core.utils import Log
+from lisa.core.lisa_core import DownloadRequiredError
+from lisa.core.data_interface import DatasetNotFoundError
 from lisa._version import __version__
-from lisa.core.lisa_core import INSTALL_PATH, DownloadRequiredError
 import configparser
 import argparse
 import os
@@ -28,13 +29,14 @@ import json
 from collections import defaultdict
 from shutil import copyfile
 import lisa.cli.test_cli as tests
+from shutil import copyfile
 
 from lisa.lisa_public_data.lisa import _config as public_config
 from lisa.lisa_user_data.lisa import _config as user_config
 
 #____COMMAND LINE INTERFACE________
 
-INSTANTIATION_KWARGS = ['cores','isd_method','verbose','assays']
+INSTANTIATION_KWARGS = ['isd_method','verbose','assays', 'rp_map']
 PREDICTION_KWARGS = ['background_list','num_background_genes','background_strategy', 'seed']
 
 def extract_kwargs(args, keywords):
@@ -49,13 +51,6 @@ def is_valid_prefix(prefix):
             raise argparse.ArgumentTypeError('{}: Invalid file prefix.'.format(prefix))
     else:
         return prefix
-
-def lisa_download(args):
-    lisa = FromGenes(args.species)
-    if args.url:
-        print(lisa.get_dataset_url())
-    else:
-        lisa.download_data()
 
 def save_results(args, results, metadata):
 
@@ -86,6 +81,26 @@ def lisa_oneshot(args):
     save_results(args, results, metadata)
 
 
+def lisa_regions(args):
+
+    try:
+        args.background_list = args.background_list.readlines()
+    except AttributeError:
+        pass
+
+    if not args.macs_xls:
+        fn = FromRegions.using_bedfile
+    else:
+        fn = FromRegions.using_macs_output
+
+    results, metadata = fn(args.species, args.regions, args.query_genes, rp_map = args.rp_map,
+        rp_decay=args.rp_decay, isd_method=args.isd_method, background_list=args.background_list,
+        background_strategy=args.background_strategy, num_background_genes = args.num_background_genes,
+        seed=args.seed, header = args.header)
+    
+    save_results(args, results, metadata)
+
+
 def save_and_get_top_TFs(args, query_name, results, metadata):
 
     with open(args.output_prefix + query_name + '.lisa.tsv', 'w') as f:
@@ -95,22 +110,12 @@ def save_and_get_top_TFs(args, query_name, results, metadata):
         with open(args.output_prefix + query_name + '.metadata.json', 'w') as f:
             f.write(json.dumps(metadata, indent=4))
 
-    try:
-        top_TFs = results.filter_rows(lambda x : x <= 0.01, 'summary_p_value').todict()['factor']
-    except KeyError:
-        top_TFs = ['None']
+    top_TFs = results.to_dict()['factor']
 
-    top_TFs_unique, encountered = [], set()
-    for TF in top_TFs:
-        if not TF in encountered:
-            top_TFs_unique.append(TF)
-            encountered.add(TF)
-
-    return top_TFs_unique
-
+    return list(set(top_TFs[:10]))
 
 def print_results_multi(results_summary):
-    print('Sample\tTop Regulatory Factors (p < 0.01)')
+    print('Sample\tTop Regulatory Factors:')
     for result_line in results_summary:
         print(result_line[0], ', '.join(result_line[1]), sep = '\t')
 
@@ -137,75 +142,7 @@ def lisa_multi(args):
 
     print_results_multi(results_summary)
 
-
-def lisa_backcompatible(args):
-
-    def make_original_csv_format(filename, results, p_val_col):
-
-        with open(filename, 'w') as f:
-
-            if args.isd_method == 'chipseq':
-                print(',pval,species,factor,factor_type,cell_line,cell_type,tissue,qc', file = f)
-                index_with = ['sample_id','factor',p_val_col,'species','factor','factor_type','cell_line','cell_type','tissue','qc']
-            else:
-                print(',pval,edition,source,sourcefile,status,numseqs,pmid', file = f)
-                index_with = ['sample_id','factor',p_val_col,'edition','source','sourcefile','status','numseqs','pmid']
-            
-            for x in zip(*results.get_column(index_with)):
-                print(x[0]+'|'+x[1],*x[2:],sep = ',', file = f)
-
-    def make_model_dataframe(filename, model_dir, metdata):
-        sample_id = metadata[model_dir]['selected_datasets']['sample_id']
-        coefs = metadata[model_dir]['chromatin_model']['coefs']
-        cell_type = metadata[model_dir]['selected_datasets']['cell_type']
-        cell_line = metadata[model_dir]['selected_datasets']['cell_line']
-        tissue = metadata[model_dir]['selected_datasets']['tissue']
-
-        with open(filename, 'w') as f:
-            print(',coefficients,cell_line,cell_type,tissue', file = f)
-            for line in zip(sample_id, coefs, cell_type, cell_line, tissue):
-                print(*line, sep = ',', file = f)
-
-    def make_summary_table(filename, results):
-        factor_pvals = defaultdict(list)
-        for factor, pval in zip(*results.get_column(['factor','summary_p_value'])):
-            factor_pvals[factor].append(pval)
-
-        with open(filename, 'w') as f:
-            print('Transcription Factor,1st Sample p-value,2nd Sample p-value,3rd Sample p-value,4th Sample p-value,5th Sample p-value', file = f)
-            for factor, pval_list in factor_pvals.items():
-                print(factor, *pval_list[:5],sep = ',',file = f)
-
-    if args.isd_method == 'knockout':
-        args.isd_method = 'chipseq'
-
-    lisa = FromGenes(args.species, **extract_kwargs(args, INSTANTIATION_KWARGS))
-    results, metadata = lisa.predict(args.query_list.readlines(), **extract_kwargs(args, PREDICTION_KWARGS))
-    
-    if args.save_metadata:
-        with open(args.prefix + '.metadata.json', 'w') as f:
-                f.write(json.dumps(metadata, indent=4))
-        with open(args.prefix + '.lisa.tsv', 'w') as f:
-            f.write(results.to_tsv())
-
-    results = results.add_column('factor_type',['tf']*len(results))\
-                .add_column('species',[args.species]*len(results)).add_column('qc',['1']*len(results))
-
-    original_isd_names = {'chipseq' : 'chipseq', 'motifs' : 'motif99'}
-    
-    make_original_csv_format(args.prefix + '.DNase.' + original_isd_names[args.isd_method] + '.p_value.csv', results, 'DNase_p_value')
-    make_original_csv_format(args.prefix + '.H3K27ac.' + original_isd_names[args.isd_method] + '.p_value.csv', results, 'H3K27ac_p_value')
-    
-    original_isd_names = {'chipseq' : 'chipseq', 'motifs' : 'motif'}
-
-    make_original_csv_format(args.prefix + '.' + original_isd_names[args.isd_method] + '_direct.p_value.csv', results, lisa.isd_method+'_p_value')
-    make_original_csv_format(args.prefix + '_' + original_isd_names[args.isd_method] + '_cauchy_combine_raw.csv', results, 'summary_p_value')
-
-    make_model_dataframe(args.prefix + '.DNase.coefs.csv','DNase',metadata)
-    make_model_dataframe(args.prefix + '.H3K27ac.coefs.csv','H3K27ac',metadata)
-
-    #make_summary_table(args.prefix + '.combined.' + original_isd_names[args.isd_method] + '.csv', results)
-
+    #make_summary_table(args.prefix + '.combined.' + original_isd_names[args.isd_method] + '.csv'
 def run_tests(args):
 
     if not args.skip_oneshot:
@@ -220,8 +157,10 @@ def build_common_args(parser):
     parser.add_argument('--save_metadata', action = 'store_true', default = False, help = 'Save json-formatted metadata from processing each gene list.')
 
 def build_from_genes_args(parser):
-    parser.add_argument('-c','--cores', required = True, type = int)
-    parser.add_argument('-a','--assays',nargs='+',default=['Direct','H3K27ac','DNase'], choices=['Direct','H3K27ac','DNase'])
+    #parser.add_argument('-c','--cores', required = True, type = int)
+    parser.add_argument('-a','--assays',nargs='+',default=['Direct','H3K27ac','DNase'], choices=['Direct','H3K27ac','DNase'], help = 'Which set of insilico-deletion assays to run.')
+    parser.add_argument('--rp_map_style', dest = 'rp_map', choices=public_config.get('lisa_params','rp_map_styles').split(','),
+        default= public_config.get('lisa_params','rp_map_styles').split(',')[0], help = 'Which style of rp_map to assess influence of regions on genes. "basic" is stricly distance-based, while "enhanced" masks the exon and promoter regions of nearby genes.')
 
 def build_multiple_lists_args(parser):
     parser.add_argument('query_lists', type = argparse.FileType('r', encoding = 'utf-8'), nargs = "+", help = 'user-supplied gene lists. One gene per line in either symbol or refseqID format')
@@ -231,11 +170,10 @@ def build_multiple_lists_args(parser):
         help = 'Number of sampled background genes to compare to user-supplied genes. These genes are selection from other gene lists.')
     parser.add_argument('--random_background', action = 'store_const', const = 'random', default = 'regulatory', dest = 'background_strategy', help = 'Use random background selection rather than "regulatory" selection.')
     
-
-def build_one_list_args(parser):
+def build_one_list_args(parser, default_background_strategy = 'regulatory'):
     parser.add_argument('-o','--output_prefix', required = False, type = is_valid_prefix, help = 'Output file prefix. If left empty, will write results to stdout.')
     parser.add_argument('--background_strategy', choices = public_config.get('lisa_params', 'background_strategies').split(','),
-        default = 'regulatory',
+        default = default_background_strategy,
         help = """Background genes selection strategy. LISA samples background genes to compare to user\'s genes-of-interest from a diverse
         regulatory background (regulatory - recommended), randomly from all genes (random), or uses a user-provided list (provided).
         """)
@@ -251,21 +189,6 @@ def confirm_file(arg):
         return arg
     else:
         raise argparse.ArgumentTypeError('ERROR: {} is not a valid file'.format(str(arg)))
-
-def extract_tar_func(args):
-    FromGenes.extract_tar(args.tarball, INSTALL_PATH, rm = args.rm)
-
-def lisa_regions(args):
-
-    try:
-        args.background_list = args.background_list.readlines()
-    except AttributeError:
-        pass
-
-    results, metadata = FromRegions(args.species, args.regions, isd_method = args.isd_method)\
-        .predict(args.query_list.readlines(), **extract_kwargs(args, PREDICTION_KWARGS))
-    
-    save_results(args, results, metadata)
 
 class RstFormatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawTextHelpFormatter):
     pass
@@ -295,7 +218,7 @@ If you have multiple lists, this option will be slower than using "multi" due to
 
 Example::
 
-    $ lisa oneshot hg38 ./genelist.txt -b 501 -c 5 --seed=2556 --save_metadata > results.tsv
+    $ lisa oneshot hg38 ./genelist.txt -b 501 --seed=2556 --save_metadata > results.tsv
 
 ''')
 oneshot_parser.add_argument('species', choices = ['hg38','mm10'], help = 'Find TFs associated with human (hg38) or mouse (mm10) genes')
@@ -319,7 +242,7 @@ the test on up and down-regulated genes from multiple RNA-seq clusters.
 
 Example::
 
-    $ lisa multi hg38 ./genelists/*.txt -b 501 -c 5 -o ./results/
+    $ lisa multi hg38 ./genelists/*.txt -b 501 -o ./results/
 
 ''')
 multi_parser.add_argument('species', choices = ['hg38','mm10'], help = 'Find TFs associated with human (hg38) or mouse (mm10) genes')
@@ -328,58 +251,9 @@ build_from_genes_args(multi_parser)
 build_common_args(multi_parser)
 multi_parser.set_defaults(func = lisa_multi, background_list = None)
 
-#__ download command ___
-download_data_parser = subparsers.add_parser('download', help = 'Download data from CistromeDB. Use if data recieved is incomplete or malformed.')
-download_data_parser.add_argument('species', choices = ['hg38','mm10'], help = 'Download data associated with human (hg38) or mouse (mm10) genes')   
-download_data_parser.add_argument('--url', action = 'store_true', help = 'Get url for data download. Does not install data.')
-download_data_parser.set_defaults(func = lisa_download)
-
-#__ install command __
-install_data_parser = subparsers.add_parser('unpack', help = 'Helper command for manually installing Lisa\'s data')
-install_data_parser.add_argument('tarball', type = confirm_file, help = 'Path to downloaded data tarball')
-install_data_parser.add_argument('--remove', dest = 'rm', action = 'store_true', help = 'Remove data tarball after unpacking is complete.')
-install_data_parser.set_defaults(func = extract_tar_func)
-
-#__ LISA back-compatible interface __
-def get_background_option(arg):
-    if os.path.isfile(arg):
-        return argparse.FileType('r')(arg)
-    elif arg == 'dynamic_auto_tad':
-        return []
-    else:
-        raise argparse.ArgumentTypeError('ERROR: {} is neither a background genelist file, nor an allowed background selection option.'.format(arg)) 
-
-backcompat_parser = subparsers.add_parser('backcompat', help = 'Interface with LISA using the version 1 command line constructs')
-backcompat_parser.add_argument('query_list', type = argparse.FileType('r', encoding = 'utf-8'), help = 'user-supplied gene lists. One gene per line in either symbol or refseqID format')
-backcompat_parser.add_argument('--species', choices = ['hg38','mm10'], help = 'Find TFs associated with human (hg38) or mouse (mm10) genes')
-backcompat_parser.add_argument('--threads', dest = 'cores', required = True, type = int, default = 1)
-backcompat_parser.add_argument('--seed', type = int, default = 2556, help = 'Random seed for gene selection. Allows for reproducing exact results. LISA may be more sensitive to seed when background count is low.')
-backcompat_parser.add_argument('--prefix', required=True, type = is_valid_prefix, help = 'Output file prefix.')
-backcompat_parser.add_argument('--stat_background_number', dest='num_background_genes', type = int, default = public_config.get('lisa_params', 'background_genes'),
-    help = 'Number of sampled background genes to compare to user-supplied genes')
-backcompat_parser.add_argument('--background', dest = 'background_list', type = get_background_option, help = 'background genes provided as file, or type of background selection')
-backcompat_parser.add_argument('--method', choices=['knockout', 'chipseq', 'motifs'], dest = 'isd_method', required=True,
-    help = 'Use motif hits instead of ChIP-seq peaks to represent TF binding (only recommended if TF-of-interest is not represented in ChIP-seq database).')
-#absorb all old and deprecated flags
-for flag in 'clean,web,new_rp_h5,new_count,cluster,random,covariates,new_count_h5'.split(','):
-    backcompat_parser.add_argument('--' + flag, required=False, help = 'deprecated option')
-backcompat_parser.add_argument('-v','--verbose',type = int, default = 4)
-backcompat_parser.set_defaults(func = lisa_backcompatible, background_strategy = 'regulatory')
-backcompat_parser.add_argument('--save_metadata', action = 'store_true', default = False, help = 'Save json-formatted metadata from processing each gene list.')
-parser.add_argument('--epigenome',nargs='+',default=['Direct','H3K27ac','DNase'],dest='assays',choices=['Direct','H3K27ac','DNase'])
-
-#____ LISA run tests command ___
-test_parser = subparsers.add_parser('run-tests')
-test_parser.add_argument('species', type = str, choices=['hg38','mm10'])
-test_parser.add_argument('test_genelist', type = confirm_file, help = 'test genelist for oneshot command')
-test_parser.add_argument('background_genelist', type = confirm_file, help = 'background genelist for oneshot command')
-test_parser.add_argument('genelists', nargs = '+', type = str, help = 'genelists for testing multi and one-vs-rest commands')
-test_parser.add_argument('--skip_oneshot', action='store_true')
-args = parser.parse_args()
-test_parser.set_defaults(func = run_tests)
-
+from argparse import SUPPRESS
 #____ LISA regions command ____
-regions_parser = subparsers.add_parser('regions', formatter_class=RstFormatter, description = '''
+regions_parser = subparsers.add_parser('regions', formatter_class=RstFormatter, add_help = False, description = '''
 lisa regions
 ------------
 
@@ -399,14 +273,69 @@ Example::
 
 ''')
 regions_parser.add_argument('species', choices = ['hg38','mm10'], help = 'Find TFs associated with human (hg38) or mouse (mm10) genes')
-regions_parser.add_argument('-r', '--regions', type = str, required = True, help = 'Bed file with columns: chr, start, end[, score]')
-regions_parser.add_argument('-q' '--query_list', required = True, type = argparse.FileType('r', encoding = 'utf-8'), help = 'user-supplied gene list. One gene per line in either symbol or refseqID format')
-build_one_list_args(regions_parser)
-build_common_args(regions_parser)
+regions_required = regions_parser.add_argument_group('required arguments')
+regions_required.add_argument('-q', '--query_genes', required = True, type = argparse.FileType('r', encoding = 'utf-8'), help = 'user-supplied gene list. One gene per line in either symbol or refseqID format')
+regions_required.add_argument('-r', '--regions', type = confirm_file, required = True, help = 'Tad-delineated bed file with columns: chr, start, end[, score]. The score column is optional. If not provided, LISA will assign each region a uniform weight.')
+regions_optional = regions_parser.add_argument_group('optional arguments')
+regions_optional.add_argument('--header', action = 'store_true', default=False, help = 'Bed file has header row as first row. The header row may contain ')
+regions_optional.add_argument('--macs_xls', action = 'store_true', default=False, help='If provided, regions file is a MACS2 .xls output file, and the "pileup" field is taken to be the region score.')
+regions_optional.add_argument('--rp_map_style', dest = 'rp_map', choices=user_config.get('lisa_params','rp_map_styles').split(','),
+    default=user_config.get('lisa_params','rp_map_styles').split(',')[0])
+regions_optional.add_argument('--rp_decay', type = int, default = user_config.get('lisa_params','rp_decay'),
+    help = 'Distance in base-pairs in which the influence of a region on a gene decays by half. Increase for more weight on distal elements, decrease for more weight on promoter elements.')
+build_one_list_args(regions_optional, default_background_strategy='all')
+build_common_args(regions_optional)
+regions_optional.add_argument('-h', '--help', action = 'help', default=SUPPRESS)
 regions_parser.set_defaults(func = lisa_regions)
+
+#__ download command ___
+
+def lisa_download(args):
+    if args.command in ['oneshot','multi']:
+        _class = FromGenes
+    elif args.command == 'regions':
+        _class = FromRegions
+    if args.url:
+        print(_class.get_dataset_url(args.species))
+    else:
+        _class.download_dataset(args.species)
+
+download_data_parser = subparsers.add_parser('download', description = 'Download data from CistromeDB. Use if data recieved is incomplete or malformed.')
+download_data_parser.add_argument('species', choices = ['hg38','mm10'], help = 'Download data associated with human (hg38) or mouse (mm10) genes')   
+download_data_parser.add_argument('command', choices=['oneshot', 'multi', 'regions'], help = 'For which command to download data')
+download_data_parser.add_argument('--url', action = 'store_true', help = 'Get url for data download. Does not install data.')
+download_data_parser.set_defaults(func = lisa_download)
+
+#__ install command ___
+
+def install_data(args):
+    if args.command in ['oneshot','multi']:
+        _class = FromGenes
+    elif args.command == 'regions':
+        _class = FromRegions
+    if args.remove:
+        os.rename(args.dataset, _class.get_dataset_path(args.species))
+    else:
+        copyfile(args.dataset, _class.get_dataset_path(args.species))
+
+install_data_parser = subparsers.add_parser('install', description = 'Helper command for manually installing Lisa\'s data')
+install_data_parser.add_argument('species', choices = ['hg38','mm10'], help = 'Install data associated with human (hg38) or mouse (mm10) genes')   
+install_data_parser.add_argument('command', choices=['oneshot', 'multi', 'regions'], help = 'For which command to install data')
+install_data_parser.add_argument('dataset', type = confirm_file, help = 'Path to downloaded h5 dataset')
+install_data_parser.add_argument('--remove', action = 'store_true', help = 'Delete dataset after installation is complete.')
+install_data_parser.set_defaults(func = install_data)
+
+#____ LISA run tests command ___
+test_parser = subparsers.add_parser('run-tests')
+test_parser.add_argument('species', type = str, choices=['hg38','mm10'])
+test_parser.add_argument('test_genelist', type = confirm_file, help = 'test genelist for oneshot command')
+test_parser.add_argument('background_genelist', type = confirm_file, help = 'background genelist for oneshot command')
+test_parser.add_argument('genelists', nargs = '+', type = str, help = 'genelists for testing multi and one-vs-rest commands')
+test_parser.add_argument('--skip_oneshot', action='store_true')
+args = parser.parse_args()
+test_parser.set_defaults(func = run_tests)
     
 def main():
-
     #____ Execute commands ___
     args = parser.parse_args()
 
@@ -417,5 +346,5 @@ def main():
     else:
         try:
             args.func(args)
-        except (AssertionError, DownloadRequiredError) as err:
+        except (AssertionError, DownloadRequiredError, DatasetNotFoundError) as err:
             print(err, file = sys.stderr)
