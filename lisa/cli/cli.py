@@ -11,8 +11,8 @@ Installing LISA using pip or conda adds the "lisa" command to your path. LISA's 
 
 Which are used depending on the evidence you have on hand. 
 
-See the `User Guide <docs/user_guide.rst>`_ for more usage information.
-See the `Python API <docs/python_api.rst>`_ for more in-depth description of tests and parameters.
+See the `User Guide <user_guide.rst>`_ for more usage information.
+See the `Python API <python_api.rst>`_ for more in-depth description of tests and parameters.
 
 '''
 
@@ -31,8 +31,8 @@ from shutil import copyfile
 import lisa.cli.test_cli as tests
 from shutil import copyfile
 
-from lisa.lisa_public_data.lisa import _config as public_config
-from lisa.lisa_user_data.lisa import _config as user_config
+from lisa.lisa_public_data.genes_test import _config as public_config
+from lisa.lisa_user_data.regions_test import _config as user_config
 
 #____COMMAND LINE INTERFACE________
 
@@ -269,7 +269,9 @@ associated score should be positive. Scores are often read-depth at those region
 
 Example::
 
-    $ lisa regions -r ./regions.bed -q ./genelist.txt -b 501 --save_metadata > results.tsv
+    $ lisa regions -r ./regions.bed -q ./genelist.txt --save_metadata > results.tsv
+    $ lisa regions -r ./macs_peaks.xls -q ./genelist.txt --macs_xls > results.tsv
+
 
 ''')
 regions_parser.add_argument('species', choices = ['hg38','mm10'], help = 'Find TFs associated with human (hg38) or mouse (mm10) genes')
@@ -287,6 +289,12 @@ build_one_list_args(regions_optional, default_background_strategy='all')
 build_common_args(regions_optional)
 regions_optional.add_argument('-h', '--help', action = 'help', default=SUPPRESS)
 regions_parser.set_defaults(func = lisa_regions)
+
+'''#___ LISA bam_test command _____
+bam_parser = subparsers.add_parser('convert-bam', formatter_class = RstFormatter, add_help = False, description = 'Convert a BAM file into a coverage array over bins.')
+bam_parser.add_argument('species', choices = ['hg38','mm10'], help = 'Pileup over hg38 or mm10 genome')
+bam_parser.add_argument('bamfile', type = confirm_file, help = 'BAM file to convert into coverage array')
+bam_parser.add_argument('')'''
 
 #__ download command ___
 

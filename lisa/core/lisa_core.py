@@ -62,8 +62,6 @@ class LISA_Core:
         assert( isd_method in  self.isd_options ), 'ISD method must be ({})'.format(', '.join(self.isd_options))
         assert( species in ['mm10','hg38'] ), "Species must be either hg38 or mm10"
         
-        self.data_interface = DataInterface(species, window_size=window_size, make_new=False)
-
         self.isd_method = self.factor_binding_technologies[isd_method]
 
         #use provided log object or create a new one. Applications which call LISA may want to pass in their own log object for control of indentation
@@ -72,6 +70,9 @@ class LISA_Core:
         else:
             assert( isinstance(log, Log) )
             self.log = log
+
+        self.data_interface = DataInterface(species, window_size=window_size, make_new=False,
+            download_if_not_exists=True, log=self.log, load_genes=True)
         
         #data has not yet been loaded
         self._is_loaded = False

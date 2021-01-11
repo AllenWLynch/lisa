@@ -1,0 +1,44 @@
+Building DAG of jobs...
+Relative file path './data/4_sort_summits.bed' starts with './'. This is redundant and strongly discouraged. It can also lead to inconsistent results of the file-matching approach used by Snakemake. You can simply omit the './' for relative file paths.
+Using shell: /bin/bash
+Provided cluster nodes: 4
+Job counts:
+	count	jobs
+	1	all
+	2	download_motifs
+	2	filter_motifs
+	3	format_h5
+	1	get_chip_hits
+	2	get_motif_hits
+	11
+
+[Mon Jan 11 15:22:50 2021]
+rule download_motifs:
+    output: data/motif_beds_long/hg38/MA0162.2_EGR1_jaspar.bed
+    jobid: 6
+    wildcards: species=hg38, dataset_id=MA0162.2_EGR1, metadata=jaspar
+
+Error submitting jobscript (exit code 127):
+
+
+[Mon Jan 11 15:22:50 2021]
+rule download_motifs:
+    output: data/motif_beds_long/hg38/MA0162.3_EGR1_jaspar.bed
+    jobid: 10
+    wildcards: species=hg38, dataset_id=MA0162.3_EGR1, metadata=jaspar
+
+Error submitting jobscript (exit code 127):
+
+
+[Mon Jan 11 15:22:50 2021]
+rule get_chip_hits:
+    input: ./data/4_sort_summits.bed
+    output: data/indices/hg38/1000/ChIP-seq_4_EGR1-K562-Erythroblast-Bone Marrow.txt
+    jobid: 2
+    wildcards: species=hg38, window_size=1000, dataset_id=4, metadata=EGR1-K562-Erythroblast-Bone Marrow
+
+Error submitting jobscript (exit code 127):
+
+Shutting down, this might take some time.
+Exiting because a job execution failed. Look above for error message
+Complete log: /Users/alynch/projects/lisa_project/liulab-lisa/lisa2/cistrome_processing/.snakemake/log/2021-01-11T152249.925609.snakemake.log

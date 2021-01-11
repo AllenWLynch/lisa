@@ -14,10 +14,16 @@ CONFIG_PATH = os.path.join(os.path.dirname(__file__),'config.ini')
 _config = configparser.ConfigParser()
 _config.read([base_config_path, CONFIG_PATH])
 
-class LISA(LISA_Core):
+class FromGenes(LISA_Core):
     '''
 lisa.FromGenes
 **************
+
+Inputs:
+    * Genes of interest
+
+Outputs:
+    * Predicted TF influence
 
 Interface for performing LISA test for TF influence using public chromatin accessibility data. Given just a set of genes, LISA will identify a subset of a large database
 of public H3K27ac and DNase profiles that represents a model for multiple chromatin states around those genes. LISA then assesses the influence of TF binding 
@@ -28,20 +34,14 @@ genes-of-interest, as well as regions-of-interest, you may use the more specific
 
 Example::
 
-    # Read genelist file
-    >>> genes_file = open('./genelist.txt', 'r')
-    >>> genes = [x.strip() for x in genes_file.readlines()]
-    >>> genes_file.close()
-    # Instantiate lisa_regions object. You can pass your regions as a python list of lists, or as the filepath to a bedfile
-    >>> lisa_regions = lisa.FromGenes('hg38', cores = 10, isd_method = 'chipseq')
-    # Run the LISA test on your genelist
-    >>> results, metadata = lisa_regions.predict(genes, num_background_genes = 501)
-    # Print results to stdout
-    >>> print(results.to_tsv())
-    # Get results as pandas DataFrame
-    >>> results_df = pd.DataFrame(results.to_dict())
+    with open('./genelist.txt', 'r') as genes_file:
+        genes = [x.strip() for x in genes_file.readlines()]
 
-**For more, see `user guide <docs/user_guide.rst>`_.**
+    results, metadata = lisa.FromGenes('hg38').predict(genes)
+
+    results_df = pd.DataFrame(results.to_dict())
+
+For more, see `user guide <docs/user_guide.rst>`_.
 
     '''
 
@@ -54,25 +54,24 @@ Example::
     
     def __init__(self, species, rp_map = 'enhanced_10K', assays = ['Direct','H3K27ac','DNase'], isd_method = 'chipseq', verbose = True, log = None):
         '''
-    **lisa.FromGenes(species, rp_map = 'basic_10K', assays = ['Direct','H3K27ac','DNase'], isd_method = 'chipseq', verbose = True, log = None)**
-    
+*class*
+**lisa.FromGenes** (species, rp_map = 'basic_10K', assays = ['Direct','H3K27ac','DNase'], isd_method = 'chipseq', verbose = True, log = None)
+
     Initialize the LISA test using public data.
 
-    Params
-    ------
-    species : {'hg38', 'mm10'}
-    assays : list of {"Direct","H3K27ac","DNase"}
-        default is all tests
-    isd_method : {"chipseq", "motifs"}
-        Use ChIP-seq data or motifs to mark TF binding locations.
-    rp_map : {"basic_10K", "enhanced_10K"}
-        Choice of RP map, which maps the regulatory influence of a region to a gene. The "basic_10K" model is based simply off distance, with the "enhanced_10K" model masks out the promoter and exon regions of other nearby genes.
-    verbose: int
-        Number of levels of log messages to print to stderr
-    
-    Returns
-    -------
-    lisa.lisa_public_data.lisa object
+    Params:
+        species {'hg38', 'mm10'}:
+        assays (list of {"Direct","H3K27ac","DNase"}):
+            default is all tests
+        isd_method {"chipseq", "motifs"}:
+            Use ChIP-seq data or motifs to mark TF binding locations.
+        rp_map {"basic_10K", "enhanced_10K"}:
+            Choice of RP map, which maps the regulatory influence of a region to a gene. The "basic_10K" model is based simply off distance, with the "enhanced_10K" model masks out the promoter and exon regions of other nearby genes.
+        verbose (int):
+            Number of levels of log messages to print to stderr
+
+    Returns:
+        lisa object
         '''
 
         cores = 1
@@ -178,29 +177,28 @@ For better efficiency, make #datasets a multiple of #cores.'''.format(self.cores
     def predict(self, query_list, background_list = [], background_strategy = 'regulatory', num_background_genes = 3000, 
         seed = 2556):
         '''
-        **predict(self, query_list, background_list = [], background_strategy = 'regulatory', num_background_genes = 3000, seed = 2556)**
-        
+    *method*
+    **.predict** (self, query_list, background_list = [], background_strategy = 'regulatory', num_background_genes = 3000, seed = 2556)
+    
         Predict TF influence given a set of genes.
         
-        Params
-        ------
-        query_list : list
-            Genes-of-interest, in either Symbol of RefSeqID format. Must provide between 20 to 500 genes.
-        background_list : list
-            User-specified list of background genes to compare with query_list. Must contain more genes than query list and entire list will be used. If provided, ```background_strategy``` must be set to "provided".
-        background_strategy : {"regulatory","random","provided"}
-            Regulatory will sample background genes from a stratified sample of TADs and regulatory states, random will randomly sample from all non-query genes.
-        num_background_genes : int
-            Number of genes to use as comparison to query genes. More background genes make test slower, but more stable.
-        seed : int
-            Seed for gene selection and regression model initialization.
+        Params:
+            query_list (list):
+                Genes-of-interest, in either Symbol of RefSeqID format. Must provide between 20 to 500 genes.
+            background_list (list):
+                User-specified list of background genes to compare with query_list. Must contain more genes than query list and entire list will be used. If provided, ```background_strategy``` must be set to "provided".
+            background_strategy {"regulatory","random","provided"}:
+                Regulatory will sample background genes from a stratified sample of TADs and regulatory states, random will randomly sample from all non-query genes.
+            num_background_genes (int):
+                Number of genes to use as comparison to query genes. More background genes make test slower, but more stable.
+            seed (int):
+                Seed for gene selection and regression model initialization.
 
-        Returns
-        -------
-        results
-            lisa.core.utils.LISA_Results object with each key representing a table column, sorted by "summary_p_value" field. The dictionary can be passed directly to a the pandas constructor: ``results_df = pd.DataFrame(results.todict())``.
-        metadata
-            Dictionary with test metadata. Includes query genes provided and background genes that were selected. This metadata dict also contains information on the accessibility datasets that were selected to represent the chromatin landscape around you genes-of-interest, for example, the tissue and cell line from which the profiles were derived.
+        Returns:
+            results (lisa.core.utils.LISA_Results):
+                Can be passed directly to a the pandas constructor: ``results_df = pd.DataFrame(results.to_dict())``.
+            metadata (dict):
+                Dictionary with test metadata. Includes query genes provided and background genes that were selected. This metadata dict also contains information on the accessibility datasets that were selected to represent the chromatin landscape around you genes-of-interest, for example, the tissue and cell line from which the profiles were derived.
         
         '''
         return super().predict(query_list, background_list=background_list, background_strategy=background_strategy, 

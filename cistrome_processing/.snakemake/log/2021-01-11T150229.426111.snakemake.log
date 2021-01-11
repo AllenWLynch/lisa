@@ -1,0 +1,3 @@
+NameError in line 66 of /Users/alynch/projects/lisa_project/liulab-lisa/lisa2/cistrome_processing/Snakefile:
+name 'dataset_id' is not defined
+  File "/Users/alynch/projects/lisa_project/liulab-lisa/lisa2/cistrome_processing/Snakefile", line 66, in <module>

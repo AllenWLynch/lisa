@@ -1,0 +1,16 @@
+Building DAG of jobs...
+InputFunctionException in line 125 of /Users/alynch/projects/lisa_project/liulab-lisa/lisa2/cistrome_processing/Snakefile:
+Error:
+  KeyError: '1'
+Wildcards:
+  species=hg38
+  window_size=1000
+  dataset_id=1
+  metadata=BTAF1-HeLa-Epithelium-Cervix
+Traceback:
+  File "/Users/alynch/projects/lisa_project/liulab-lisa/lisa2/cistrome_processing/Snakefile", line 127, in <lambda>
+  File "/Users/alynch/projects/.venvs/lisa_2.1_testing/lib/python3.8/site-packages/pandas/core/indexing.py", line 879, in __getitem__
+  File "/Users/alynch/projects/.venvs/lisa_2.1_testing/lib/python3.8/site-packages/pandas/core/indexing.py", line 1110, in _getitem_axis
+  File "/Users/alynch/projects/.venvs/lisa_2.1_testing/lib/python3.8/site-packages/pandas/core/indexing.py", line 1059, in _get_label
+  File "/Users/alynch/projects/.venvs/lisa_2.1_testing/lib/python3.8/site-packages/pandas/core/generic.py", line 3493, in xs
+  File "/Users/alynch/projects/.venvs/lisa_2.1_testing/lib/python3.8/site-packages/pandas/core/indexes/base.py", line 2900, in get_loc

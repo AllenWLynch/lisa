@@ -1,0 +1,13 @@
+ParserError in line 10 of /Users/alynch/projects/lisa_project/liulab-lisa/lisa2/cistrome_processing/Snakefile:
+Error tokenizing data. C error: Expected 3 fields in line 4, saw 9
+
+  File "/Users/alynch/projects/lisa_project/liulab-lisa/lisa2/cistrome_processing/Snakefile", line 10, in <module>
+  File "/Users/alynch/projects/.venvs/lisa_2.1_testing/lib/python3.8/site-packages/pandas/io/parsers.py", line 688, in read_csv
+  File "/Users/alynch/projects/.venvs/lisa_2.1_testing/lib/python3.8/site-packages/pandas/io/parsers.py", line 460, in _read
+  File "/Users/alynch/projects/.venvs/lisa_2.1_testing/lib/python3.8/site-packages/pandas/io/parsers.py", line 1198, in read
+  File "/Users/alynch/projects/.venvs/lisa_2.1_testing/lib/python3.8/site-packages/pandas/io/parsers.py", line 2157, in read
+  File "pandas/_libs/parsers.pyx", line 847, in pandas._libs.parsers.TextReader.read
+  File "pandas/_libs/parsers.pyx", line 862, in pandas._libs.parsers.TextReader._read_low_memory
+  File "pandas/_libs/parsers.pyx", line 918, in pandas._libs.parsers.TextReader._read_rows
+  File "pandas/_libs/parsers.pyx", line 905, in pandas._libs.parsers.TextReader._tokenize_rows
+  File "pandas/_libs/parsers.pyx", line 2042, in pandas._libs.parsers.raise_parser_error

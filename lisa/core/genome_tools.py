@@ -31,6 +31,7 @@ class Region:
         self.end = int(end)
         self.center = int((self.end - self.start)/ 2) + self.start
         self.annotation = annotation
+        self.length = self.end - self.start
 
         assert(self.end > self.start), 'End position must be greater than start position'
 
@@ -75,6 +76,9 @@ class Region:
     def __eq__(self, region):
         return self.chromosome == region.chromosome and self.start == region.start and self.end == region.end
 
+    def __len__(self):
+        return self.length
+
 
 class Genome:
 
@@ -88,6 +92,7 @@ class Genome:
     def __init__(self, chromosomes, lengths, window_size = 100, _sort = True):
         
         self.window_size = int(window_size)
+        self.one_bp_overlap_proportion =  1/window_size
 
         if _sort:
             self.chromosomes, self.lengths = list(zip(*sorted(zip(chromosomes, lengths), key = lambda x : x[0])))
@@ -164,10 +169,15 @@ class Genome:
             except BadRegionError:
                 pass
 
-    def get_region_windows(self, region, min_window_overlap_proportion = 0.0):
+    def get_region_windows(self, region, min_window_overlap_proportion = 0.0, min_region_overlap_proportion = 0.0):
 
         assert(isinstance(region, Region))
         self.check_region(region)
+
+        min_window_overlap_proportion = max(self.one_bp_overlap_proportion, min_window_overlap_proportion, 
+            min(len(region)*min_region_overlap_proportion/self.window_size, 1.0))
+
+        assert(0.0 <= min_window_overlap_proportion <= 1.0)
 
         min_start_loc = max(region.start - (1 - min_window_overlap_proportion) * self.window_size, 0)
         max_start_loc = max(region.end - min_window_overlap_proportion * self.window_size, 0)
@@ -175,18 +185,23 @@ class Genome:
         window, j = self.get_window_from_position(region.chromosome, min_start_loc)
 
         windows = []
+        for j_plus, window_start in enumerate(range(window.start, int(max_start_loc), self.window_size)):
+            if window_start >= min_start_loc:
+                windows.append(j + j_plus)
 
-        while window.start <= max_start_loc:
+        '''while window.start <= max_start_loc:
 
-            if window.overlaps(region, min_overlap_proportion =  min_window_overlap_proportion):
+            #if window.overlaps(region, min_overlap_proportion =  min_window_overlap_proportion):
+            if window.start >= min_start_loc:
                 windows.append(j)
             
             try:
                 window, j = self.get_next_window(window)
             except BadRegionError:
-                break
+                break'''
         
         return windows
+        
 
     def map_genomes(self, genome):
 

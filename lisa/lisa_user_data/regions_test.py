@@ -2,9 +2,7 @@
 from lisa.core.lisa_core import LISA_Core
 from lisa.core.data_interface import PACKAGE_PATH, REQURED_DATASET_VERSION
 from lisa.core.lisa_core import CONFIG_PATH as base_config_path
-from lisa.core import gene_selection
 import numpy as np
-import multiprocessing
 from scipy import sparse
 from lisa.core import genome_tools
 import os
@@ -13,6 +11,7 @@ from collections.abc import Iterable
 from lisa.lisa_user_data.assays import ISD_Assay
 from lisa.core.data_interface import DataInterface
 from collections import Counter
+from lisa.core.io import parse_macs_file, parse_regions_file
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__),'config.ini')
 _config = configparser.ConfigParser()
@@ -21,40 +20,49 @@ _config.read([base_config_path, CONFIG_PATH])
 class ZeroScoreError(Exception):
     pass
 
-class LISA(LISA_Core):
+class FromRegions(LISA_Core):
     '''
 lisa.FromRegions
 ****************
 
-Interface for performing LISA test for TF influence using user-provided regions. The regions may be accompanied with a positive weight or score that
+Inputs:
+    * Genes of interest
+    * Regions (from bulk MACS2 peakcalling or peak-count matrix)
+    * Region scores (optional)
+
+Outputs:
+    * Predicted TF influence
+
+Interface for performing LISA test for TF influence using user-provided regions and genes-of-interest. The regions may be accompanied with a positive weight or score that
 notes the strength of that region for your metric of interest. Often, that metric is ATAC-seq or DNase read depth at that region, but you may provide any 
-score as long as it is positive. LISA will rescale your metric automatically to suite the test. Regions should be more than 100 bp wide, but less than 1000 bp 
-to ensure specificy for TF and motif hits within the regions. Peaks of ~300 bp are optimal since motifs hits can enrich ~75 to 100 bp away from peak summits. 
+score as long as it is positive. Regions should be more than 100 bp wide, but less than 1000 bp 
+to ensure specificy for TF and motif hits within the regions. 
 
 For optimal performance, your regions-of-interest should number > 20K and cover roughly the whole genome. If your regions are restricted to a certain chromosome,
 You must manually provide background genes that are proximal to your regions.
 
 This test also allows more flexibility to change LISA's function for mapping genomic regions' influence on nearby genes. By default, LISA uses 'Regulatory Potential' 
 with a decay of 10000 bp, meaning the regions over a gene's TSS recieve maximum influence, and influence decays by half every 10K bp. This decay rate can be increased to 
-allow long-range distal elements more weight, or reduced to prioritize promoter influence. The most powerful extension of this flexibility is the ability to specify a 
-custom genes x regions matrix, where every region's influence is mapped to every gene. 
+allow long-range distal elements more weight, or reduced to prioritize promoter influence.
 
 This interface outputs results in the same format as the ``FromGenes`` interface.
 
 Example::
 
-    # Read genelist file
-    >>> genes_file = open('./genelist.txt', 'r')
-    >>> genes = [x.strip() for x in genes_file.readlines()]
-    >>> genes_file.close()
-    # Instantiate lisa_regions object. You can pass your regions as a python list of lists, or as the filepath to a bedfile
-    >>> lisa_regions = lisa.FromRegions('hg38', './regions.bed', isd_method = 'chipseq')
-    # Run the LISA test on your genelist
-    >>> results, metadata = lisa_regions.predict(genes, num_background_genes = 501)
-    # Print results to stdout
-    >>> print(results.to_tsv())
-    # Get results as pandas DataFrame
-    >>> results_df = pd.DataFrame(results.to_dict())
+    with open('./genelist.txt', 'r') as genes_file:
+        genes = [x.strip() for x in genes_file.readlines()]
+
+    #Using Bedfile
+    results, metadata = lisa.FromRegions.using_bedfile('hg38', './path_to_bedfile.bed', genes)
+
+    #Using MACS output
+    results, metadata = lisa.FromRegions.using_macs_output('hg38', './path_to_macs.xls', genes)
+
+    #Using Estimator
+    regions, scores = lisa.parse_bedfile('./path_to_bedfile.bed', header = False)
+    results, metadata = lisa.FromRegions('hg38', regions).predict(genes)
+
+    results_df = pd.DataFrame(results.to_dict())
 
 For more, see `User Guide <docs/user_guide.rst>`_.
 
@@ -63,60 +71,11 @@ For more, see `User Guide <docs/user_guide.rst>`_.
     @classmethod
     def get_docs(cls):
         return '\n'.join(x.__doc__ for x in 
-        [cls, cls.using_bedfile, cls.using_macs_output, cls.__init__, cls.predict])
-
-    window_size = 100
-
-
-    @classmethod
-    def parse_macs_file(cls, path):
-
-        with open(path, 'r') as bed:
-            lines = bed.readlines()
-
-        region_fields = []
-        region_scores = []
-        found_header = False
-        for line in lines:
-            if found_header:
-                line = line.split('\t')
-                assert(len(line) == 10), 'Correctly-formatted MACS2 .xls files have 10 fields.'
-                region_fields.append(line[:3])
-                region_scores.append(line[5])
-            elif not line[0] == "#" and line[:3] == 'chr':
-                line = line.split('\t')
-                assert(len(line) == 10), 'Correctly-formatted MACS2 .xls files have 10 fields.'
-                found_header = True
-
-        return region_fields, region_scores
-
-    @classmethod
-    def parse_bedfile(cls, path, header):
-        with open(path, 'r') as bed:
-            lines = bed.readlines()
-
-        region_fields, region_scores = [],[]
-        num_fields = len(lines[0].split('\t'))
-        assert(num_fields in [3,4]), 'Bedfile must have only three columns (chr,start,end) or four (chr,start,end,score)'
-
-        for i, line in enumerate(lines[(1 if header else 0) : ]):
-            
-            line = line.strip().split('\t')
-            if len(line) != num_fields:
-                raise AssertionError('Error at line #{}: expected {} fields, got {}'\
-                    .format(str(i), str(num_fields), str(len(line))))
-            
-            region_fields.append(line[:3])
-            if num_fields == 4:
-                region_scores.append(line[-1])
-            elif num_fields == 3:
-                region_scores.append(1)
-
-        return region_fields, region_scores
+        [cls, cls.using_bedfile, cls.using_macs_output, cls.__init__, cls.predict, cls.get_rp_map, cls.binding_matrix, parse_regions_file])
 
     @classmethod
     def using_macs_output(cls, species, xls_path, query_genes, rp_map = 'enhanced', rp_decay = 10000, isd_method = 'chipseq', 
-            background_list = [], background_strategy = 'regulatory', num_background_genes = 3000, seed = 2556, header = False, verbose = 4, log = None):
+            background_list = [], background_strategy = 'all', num_background_genes = 3000, seed = 2556, header = False, verbose = 4, log = None):
         '''
 *classmethod*
 **lisa.FromRegions.using_macs_output** (species, xls_path, query_genes, rp_map = 'enhanced', rp_decay = 10000, isd_method = 'chipseq', background_list = [], background_strategy = 'regulatory', num_background_genes = 3000, seed = 2556, header = False, verbose = 4, log = None)**
@@ -126,7 +85,7 @@ For more, see `User Guide <docs/user_guide.rst>`_.
     Header parameter has no effect.
         '''
 
-        region_fields, region_scores = cls.parse_macs_file(xls_path)
+        region_fields, region_scores = parse_macs_file(xls_path)
         
         lisa = cls(species, region_fields, rp_map = rp_map, rp_decay=rp_decay, isd_method=isd_method, verbose=verbose, log=log)
 
@@ -135,7 +94,7 @@ For more, see `User Guide <docs/user_guide.rst>`_.
 
     @classmethod
     def using_bedfile(cls, species, path, query_genes, rp_map = 'enhanced', rp_decay = 10000, isd_method = 'chipseq', 
-            background_list = [], background_strategy = 'regulatory', num_background_genes = 3000, seed = 2556, header = False, verbose = 4, log = None):
+            background_list = [], background_strategy = 'all', num_background_genes = 3000, seed = 2556, header = False, verbose = 4, log = None):
         '''
 *classmethod*
 **lisa.FromRegions.using_bedfile** (cls, species, path, query_genes, rp_map = 'basic', rp_decay = 10000, isd_method = 'chipseq', background_list = [], background_strategy = 'regulatory', num_background_genes = 3000, seed = 2556, header = False, verbose = 4, log = None)**
@@ -177,7 +136,7 @@ For more, see `User Guide <docs/user_guide.rst>`_.
     
         assert(type(header) == bool)
 
-        region_fields, region_scores = cls.parse_bedfile(path, header)
+        region_fields, region_scores = parse_regions_file(path, header)
 
         lisa = cls(species, region_fields, rp_map = rp_map, rp_decay=rp_decay, isd_method=isd_method, verbose=verbose, log=log)
 
@@ -185,7 +144,9 @@ For more, see `User Guide <docs/user_guide.rst>`_.
             background_strategy=background_strategy, num_background_genes=num_background_genes, seed=seed)
 
 
-    def __init__(self, species, regions, rp_map = 'basic', rp_decay = 10000, isd_method = 'chipseq', verbose = 4, log = None):
+    window_size = 100
+
+    def __init__(self, species, regions, rp_map = 'enhanced', rp_decay = 10000, isd_method = 'chipseq', verbose = 4, log = None):
         '''
 *class*
 **lisa.FromRegions** (species, regions, rp_map = 'basic', rp_decay = 10000, isd_method = 'chipseq', verbose = 4, log = None)**
@@ -207,7 +168,7 @@ For more, see `User Guide <docs/user_guide.rst>`_.
             Number of levels of log messages to print to stderr
     
     Returns:
-        lisa.lisa_user_data.lisa.LISA object
+        lisa object
         '''
 
         super().__init__(species, _config, 100, isd_method= isd_method, verbose=verbose, log = log)
@@ -285,7 +246,7 @@ For more, see `User Guide <docs/user_guide.rst>`_.
             else:
                 NotImplementedError()
         else:
-            desired_shape = (len(self.rp_map_locs), len(self.regions))
+            desired_shape = (len(self.data_interface.gene_loc_set), len(self.num_regions_supplied))
             assert(self.rp_map.shape == desired_shape), 'RP_map must be of shape (n_genes, n_regions): {}'.format(str(desired_shape))
 
         return self.rp_map
@@ -296,10 +257,82 @@ For more, see `User Guide <docs/user_guide.rst>`_.
             ISD_Assay(**assay_kwargs, technology = 'Regions')
         )
 
+    def get_rp_map(self):
+        '''
+    *method*
+    **.get_rp_map** ()
+
+        Return RP map calculated for your regions, along with the gene and regions metadata.
+
+        Returns:
+            rp_map (scipy.sparse_matrix):
+                The calculated RP map, (genes x regions)
+            gene_metdata (list of tuples):
+                List of genes, with columns chr,start,end,symbol
+            region_metadata (list of tuples):
+                List of supplied regions, sorted. Columns are chr,start,end
+
+        Formatting to Anndata::
+
+            lisa_test = lisa.FromRegions('hg38', regions)
+            rp_map, gene_metadata, region_metadata = lisa_test.get_rp_map()
+
+            rp_map_anndata = anndata.AnnData(X = rp_map, 
+                obs = pd.DataFrame(gene_metadata, columns = ['chr','start','end','symbol']),
+                var = pd.DataFrame(region_metadata, columns = ['chr','start','end'])
+            )
+        '''
+        try:
+            self.rp_map
+        except AttributeError:
+            self._load_rp_map()
+        
+        gene_loc_metadata = [(gene.chrom, gene.start, gene.end, gene.annotation, gene.get_name()) for gene in self.data_interface.gene_loc_set]
+        regions_metadata = [r.to_tuple() for r in self.region_set.regions]
+
+        return self.rp_map, gene_loc_metadata, regions_metadata
+
+    def get_binding_matrix(self):
+        '''
+    *method*
+    **.get_binding_matrix** ()
+
+        Returns a binary matrix of factor hits within your regions. Rows are regions, columns are either ChIP-seq samples or motifs. 
+
+        Returns:
+            factor_binding_matrix (scipy.sparse_matrix):
+                Sparse binary matrix of shape (regions x factor). Is "1" if factor is predicted to bind at region, "0" if not.
+            region_metadata (list of tuples):
+                List of supplied regions, sorted. Columns are chr,start,end
+            factor_metadata (dict of lists):
+                Metadata for each factor binding profile.
+
+        Formatting to Anndata::
+
+            lisa_test = lisa.FromRegions('hg38', regions)
+            factor_binding, regions, factors = lisa_test.get_binding_matrix()
+
+            binding_anndata = anndata.AnnData(X = factor_binding,
+                obs = pd.DataFrame(regions, columns = ['chr','start','end'])
+                var = pd.DataFrame(factors)
+            )
+
+        '''
+
+        try:
+            self.factor_binding
+        except AttributeError:
+            self._load_factor_binding_data()
+
+        regions_metadata = [r.to_tuple() for r in self.region_set.regions]
+
+        return self.factor_binding, regions_metadata, self.data_interface.transpose_metadata(self.factor_metadata, self.isd_method)
+
+
     def predict(self, query_genes, region_scores = None, background_list = [], background_strategy = 'all', num_background_genes = 3000, seed = 2556):
         '''
     *method*
-    **predict** (query_genes, region_scores = None, background_list = [], background_strategy = 'regulatory', num_background_genes = 3000, seed = 2556)**
+    **.predict** (query_genes, region_scores = None, background_list = [], background_strategy = 'all', num_background_genes = 3000, seed = 2556)**
     
         Predict TF influence given a set of genes.
         

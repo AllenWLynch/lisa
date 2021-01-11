@@ -1,0 +1,3 @@
+NameError in line 70 of /Users/alynch/projects/lisa_project/liulab-lisa/lisa2/cistrome_processing/Snakefile:
+name 'TARGETS' is not defined
+  File "/Users/alynch/projects/lisa_project/liulab-lisa/lisa2/cistrome_processing/Snakefile", line 70, in <module>

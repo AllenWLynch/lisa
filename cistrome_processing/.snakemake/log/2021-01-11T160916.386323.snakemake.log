@@ -1,0 +1,3 @@
+TypeError in line 106 of /Users/alynch/projects/lisa_project/liulab-lisa/lisa2/cistrome_processing/Snakefile:
+can only concatenate tuple (not "list") to tuple
+  File "/Users/alynch/projects/lisa_project/liulab-lisa/lisa2/cistrome_processing/Snakefile", line 106, in <module>

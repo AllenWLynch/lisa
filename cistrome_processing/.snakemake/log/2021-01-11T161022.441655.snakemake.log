@@ -1,0 +1,70 @@
+Building DAG of jobs...
+Relative file path './data/4_sort_summits.bed' starts with './'. This is redundant and strongly discouraged. It can also lead to inconsistent results of the file-matching approach used by Snakemake. You can simply omit the './' for relative file paths.
+Job counts:
+	count	jobs
+	1	all
+	2	download_motifs
+	2	filter_motifs
+	1	format_h5
+	2	get_motif_hits
+	8
+
+[Mon Jan 11 16:10:22 2021]
+rule download_motifs:
+    output: data/motif_beds_long/hg38/MA0162.3_EGR1-jaspar.bed
+    jobid: 8
+    wildcards: species=hg38, dataset_id=MA0162.3, metadata=EGR1-jaspar
+
+
+[Mon Jan 11 16:10:22 2021]
+rule download_motifs:
+    output: data/motif_beds_long/hg38/MA0162.2_EGR1-jaspar.bed
+    jobid: 5
+    wildcards: species=hg38, dataset_id=MA0162.2, metadata=EGR1-jaspar
+
+
+[Mon Jan 11 16:10:22 2021]
+rule filter_motifs:
+    input: data/motif_beds_long/hg38/MA0162.2_EGR1-jaspar.bed
+    output: data/motif_beds/hg38/MA0162.2_EGR1-jaspar.bed
+    jobid: 4
+    wildcards: species=hg38, dataset_id=MA0162.2, metadata=EGR1-jaspar
+
+
+[Mon Jan 11 16:10:22 2021]
+rule filter_motifs:
+    input: data/motif_beds_long/hg38/MA0162.3_EGR1-jaspar.bed
+    output: data/motif_beds/hg38/MA0162.3_EGR1-jaspar.bed
+    jobid: 7
+    wildcards: species=hg38, dataset_id=MA0162.3, metadata=EGR1-jaspar
+
+
+[Mon Jan 11 16:10:22 2021]
+rule get_motif_hits:
+    input: data/motif_beds/hg38/MA0162.3_EGR1-jaspar.bed
+    output: data/indices/hg38/1000/Motifs_MA0162.3_EGR1-jaspar.txt
+    jobid: 6
+    wildcards: species=hg38, window_size=1000, dataset_id=MA0162.3, metadata=EGR1-jaspar
+
+
+[Mon Jan 11 16:10:22 2021]
+rule get_motif_hits:
+    input: data/motif_beds/hg38/MA0162.2_EGR1-jaspar.bed
+    output: data/indices/hg38/1000/Motifs_MA0162.2_EGR1-jaspar.txt
+    jobid: 3
+    wildcards: species=hg38, window_size=1000, dataset_id=MA0162.2, metadata=EGR1-jaspar
+
+
+[Mon Jan 11 16:10:23 2021]
+rule format_h5:
+    input: data/indices/hg38/1000/ChIP-seq_4_EGR1-K562-Erythroblast-Bone Marrow.txt, data/indices/hg38/1000/Motifs_MA0162.2_EGR1-jaspar.txt, data/indices/hg38/1000/Motifs_MA0162.3_EGR1-jaspar.txt
+    output: data/hg38/1000/ChIP-seq_4_EGR1-K562-Erythroblast-Bone Marrow.done, data/hg38/1000/Motifs_MA0162.2_EGR1-jaspar.done, data/hg38/1000/Motifs_MA0162.3_EGR1-jaspar.done
+    jobid: 1
+
+RuleException in line 150 of /Users/alynch/projects/lisa_project/liulab-lisa/lisa2/cistrome_processing/Snakefile:
+'Wildcards' object has no attribute 'species'
+  File "/Users/alynch/projects/.venvs/lisa_2.1_testing/lib/python3.8/site-packages/snakemake/executors/__init__.py", line 136, in run_jobs
+  File "/Users/alynch/projects/.venvs/lisa_2.1_testing/lib/python3.8/site-packages/snakemake/executors/__init__.py", line 145, in run
+  File "/Users/alynch/projects/.venvs/lisa_2.1_testing/lib/python3.8/site-packages/snakemake/executors/__init__.py", line 156, in _run
+  File "/Users/alynch/projects/.venvs/lisa_2.1_testing/lib/python3.8/site-packages/snakemake/executors/__init__.py", line 176, in printjob
+  File "/Users/alynch/projects/.venvs/lisa_2.1_testing/lib/python3.8/site-packages/snakemake/executors/__init__.py", line 162, in printjob

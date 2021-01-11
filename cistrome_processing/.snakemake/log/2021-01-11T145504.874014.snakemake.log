@@ -1,0 +1,3 @@
+ValueError in line 52 of /Users/alynch/projects/lisa_project/liulab-lisa/lisa2/cistrome_processing/Snakefile:
+not enough values to unpack (expected 2, got 1)
+  File "/Users/alynch/projects/lisa_project/liulab-lisa/lisa2/cistrome_processing/Snakefile", line 52, in <module>

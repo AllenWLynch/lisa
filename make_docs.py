@@ -6,8 +6,10 @@ import argparse
 import os
 from argparse import HelpFormatter
 from lisa.cli.cli import RstFormatter
+from lisa.core.utils import Log
 
-def new_format_help(self):
+def new_format_help(parser):
+
     formatter = RstFormatter(prog = self.prog)
 
     # description

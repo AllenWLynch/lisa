@@ -1,0 +1,2 @@
+SyntaxError in line 53 of /Users/alynch/projects/lisa_project/liulab-lisa/lisa2/cistrome_processing/Snakefile:
+iterable unpacking cannot be used in comprehension

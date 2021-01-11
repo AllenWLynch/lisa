@@ -1,0 +1,4 @@
+KeyError in line 10 of /Users/alynch/projects/lisa_project/liulab-lisa/lisa2/cistrome_processing/Snakefile:
+"None of ['id'] are in the columns"
+  File "/Users/alynch/projects/lisa_project/liulab-lisa/lisa2/cistrome_processing/Snakefile", line 10, in <module>
+  File "/Users/alynch/projects/.venvs/lisa_2.1_testing/lib/python3.8/site-packages/pandas/core/frame.py", line 4555, in set_index

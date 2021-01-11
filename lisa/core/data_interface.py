@@ -30,6 +30,10 @@ class DataInterface:
 
     _config = h5_config
     data_path = os.path.join(PACKAGE_PATH, 'data')
+
+    @classmethod
+    def get_metadata_headers(cls, technology):
+        return cls._config.get('metadata', technology + '_headers').split(',')
     
     @classmethod
     def get_dataset_url(cls, species, window_size):
@@ -54,37 +58,53 @@ class DataInterface:
         filename, _ = request.urlretrieve(dataset_url)
         os.rename(filename, cls.get_dataset_path(species, window_size))
 
+    @classmethod
+    def load_genome(cls, species, window_size):
+        return genome_tools.Genome.from_file(cls._config.get('genome','genome')\
+            .format(package_path = PACKAGE_PATH, species = species), 
+                window_size= window_size)
 
     def __init__(self, species, window_size = 1000, 
-        make_new = False, log = None):
+        download_if_not_exists = True, make_new = False, log = None, 
+        path = None, load_genes = True):
 
         self.species = species
-        self.window_size = str(window_size)
+        self.window_size = int(window_size)
 
         if log is None:
             self.log = Log()
         else:
             self.log = log
 
-        self.path = self.get_dataset_path(species, window_size)
+        if path is None:
+            self.path = self.get_dataset_path(self.species, self.window_size)
+        else:
+            self.path = path
 
-        if not os.path.isfile(self.path):
-            if make_new:
-                h5.File(self.path, 'w').close()
-            else:
+        if make_new:
+            h5.File(self.path, 'w').close()
+        elif not os.path.isfile(self.path):
+            if download_if_not_exists and path is None:
                 self.download_data()
+            else:
+                h5.File(self.path, 'w').close()
 
         #___ LOAD GENE DATA FROM PACKAGE _____
-        self.genome = genome_tools.Genome.from_file(self._config.get('genome','genome')\
-            .format(package_path = PACKAGE_PATH, species = self.species), 
-                window_size= window_size)
+        self.genome = self.load_genome(self.species, self.window_size)
 
+        if load_genes:
+            self.load_genes()
+
+        
+    def load_genes(self):
+        self.log.append('Loading gene info ...')
         self.genes = gene_selection.GeneSet.from_refseq(self._config.get('genome','genes')\
             .format(package_path = PACKAGE_PATH, species = self.species), self.genome)
 
         self.gene_loc_set = genome_tools.RegionSet([gene.get_tss_region() for gene in self.genes], self.genome)
 
         self.rp_map_locs = np.array([r.annotation.get_location() for r in self.gene_loc_set.regions])
+
 
     def get_install_path(self):
         return self.data_path
@@ -244,9 +264,6 @@ class DataInterface:
     def get_factor_hit_path(self, technology, dataset_id):
         return self._config.get('factor_binding','hits').format(technology = technology, dataset_id = dataset_id)
 
-    def get_metadata_headers(self, technology):
-        return self._config.get('metadata',technology + '_headers').split(',')
-
     def get_metadata(self, attributes, technology, dataset_id):
         return {dataset_id : {key : attributes[key] for key in self.get_metadata_headers(technology)}}
 
@@ -305,6 +322,26 @@ class DataInterface:
 
         return hits_matrix.transpose(), np.array(dataset_ids), self.transpose_metadata(metadata, technology)
 
+    def remove_binding_dataset(self, technology, dataset_id):
+
+        factor_dataset_path = self.get_factor_hit_path(technology, dataset_id)
+
+        with h5.File(self.path, 'a') as data:
+            del data[factor_dataset_path]
+
+    def list_binding_datasets(self, technology):
+
+        try:
+            with h5.File(self.path, 'r') as data:
+
+                dataset_ids = list(data[self._config.get('factor_binding','root').format(technology=technology)].keys())
+
+            return dataset_ids
+
+        except KeyError:
+            return []
+        
+
     #____ PROFILE DATA _____
     def add_profile_data(self, technology, dataset_id, profile, rp_maps, rp_map_styles, 
         norm_depth = 1e5, **metadata):
@@ -340,6 +377,17 @@ class DataInterface:
                 rp_matrix_col = data.create_dataset(rp_matrix_path, data = rp_map.dot(profile), dtype = np.float32, compression=COMPRESSION)
                 self.set_attributes(rp_matrix_col, metadata)
 
+    def remove_profile(self, technology, dataset_id):
+
+        profile_path = self._config.get('profiles','profile').format(technology = technology, dataset_id = dataset_id)
+
+        with h5.File(self.path, 'a') as data:
+            del data[profile_path]
+            
+            for style in self.get_rp_maps():
+                rp_matrix_col_path = self._config.get('profiles','rp_matrix_col').format(technology = technology, style = style, dataset_id = dataset_id)
+                del data[rp_matrix_col_path]
+
 
     def get_profile(self, technology, dataset_id):
 
@@ -357,6 +405,19 @@ class DataInterface:
             metadata = self.get_metadata(attributes, technology, dataset_id)
 
         return profile, metadata
+
+    def list_profiles(self, technology):
+
+        profiles_dir = self._config.get('profiles','root').format(technology = technology)
+
+        try:
+            with h5.File(self.path, 'r') as data:
+                
+                dataset_ids = list(data[profiles_dir].keys())
+
+            return dataset_ids
+        except KeyError:
+            return []
 
     def get_rp_matrix(self, technology, style):
 

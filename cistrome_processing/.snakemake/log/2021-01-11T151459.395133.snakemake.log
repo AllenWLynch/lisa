@@ -1,0 +1,4 @@
+Building DAG of jobs...
+MissingInputException in line 126 of /Users/alynch/projects/lisa_project/liulab-lisa/lisa2/cistrome_processing/Snakefile:
+Missing input files for rule get_chip_hits:
+/project/Cistrome/CistromeDB/processed_data/data1_Result_new/Result_new/dataset4/4_sort_summits.bed

@@ -2,7 +2,20 @@
 
 This notebook demonstrates the use of LISA's CLI and Python interfaces on real single-cell RNA-seq and ATAC-seq data. We'll start our investigation into human PBMC gene regulation using 10X mutliome data, which presents an interesting case when we can use DE genes and ATAC-seq regions to investigate trascription regulation.
 
+* [Lisa FromGenes](<#Lisa FromGenes>)
+  * [Preprocess RNA-seq data](<#Preprocess RNA-seq data>)
+  * [FromGenes Python API](<#FromGenes Python API>)
+  * [FromGenes CLI](<#FromGenes CLI>)
+  * [FromGenes Analysis](<#FromGenes Data Analysis>)
+* [Lisa FromRegions](<#Lisa FromRegions>)
+  * [Preprocess ATAC-seq data](<#Preprocess ATAC-seq data>)
+  * [FromRegions Python API](<#FromRegions Python API>)
+  * [FromRegions CLI](<#FromRegions CLI>)
+  * [FromRegions Data Analysis](<#FromRegions Data Analysis>)
+
 # Lisa FromGenes
+
+<img src="fromGenes.png" width=400>
 
 Before we can test for influential genes using LISA, we have to process our data. First, and since we are a bit impatient, we will use the "FromGenes" interface which only requires a list of DE genes. 
 
@@ -50,16 +63,8 @@ rna_data.var_names_make_unique()
 rna_data
 ```
 
-    Variable names are not unique. To make them unique, call `.var_names_make_unique`.
-    Variable names are not unique. To make them unique, call `.var_names_make_unique`.
-
-
-
-
-
     AnnData object with n_obs × n_vars = 2714 × 36601
         var: 'gene_ids', 'feature_types', 'genome'
-
 
 
 Since this RNA-seq data has already been filtered for cells, we can breeze through the preprocessing (following the Scanpy [3K PBMC tutorial](https://scanpy-tutorials.readthedocs.io/en/latest/pbmc3k.html)) and obtain our cell-type clusters:
@@ -82,12 +87,6 @@ sc.tl.leiden(rna_data, resolution=0.2)
 ```python
 sc.pl.umap(rna_data, color='leiden')
 ```
-
-    ... storing 'feature_types' as categorical
-    ... storing 'genome' as categorical
-
-
-
     
 ![png](output_7_1.png)
     
@@ -101,23 +100,7 @@ sc.tl.rank_genes_groups(rna_data, 'leiden', method='wilcoxon')
 pd.DataFrame(data = rna_data.uns['rank_genes_groups']['names'],).head(10)
 ```
 
-
-
-
 <div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
 <table border="1" class="dataframe">
   <thead>
     <tr style="text-align: right;">
@@ -268,7 +251,7 @@ cd8_up_genes = list(sc.get.rank_genes_groups_df(rna_data, group='2', log2fc_min=
 cd8_down_genes = list(sc.get.rank_genes_groups_df(rna_data, group='2', log2fc_max=-1.5).sort_values('pvals_adj').head(100).names.values)
 ```
 
-### Lisa Python API
+### FromGenes Python API
 
 
 ```python
@@ -315,7 +298,7 @@ down_results = pd.DataFrame(down_results.to_dict())
     Done!
 
 
-### Lisa CLI
+### FromGenes CLI
 
 
 ```python
@@ -369,7 +352,7 @@ with open('data/cd8_up_genes.txt.metadata.json', 'r') as f:
     up_metadata = json.loads(f.read())
 ```
 
-### Data Analysis
+### FromGenes Data Analysis
 
 First, we'll manually inspect the results of our two genelists. The top contenders for regulating the highly-expressed genes appear to be STAT6 and MYB, while SPI1 shows strong results for regulating the suppressed genes.
 
@@ -378,23 +361,7 @@ First, we'll manually inspect the results of our two genelists. The top contende
 up_results.head()
 ```
 
-
-
-
 <div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
 <table border="1" class="dataframe">
   <thead>
     <tr style="text-align: right;">
@@ -481,30 +448,11 @@ up_results.head()
 </table>
 </div>
 
-
-
-
 ```python
 down_results.head()
 ```
 
-
-
-
 <div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
 <table border="1" class="dataframe">
   <thead>
     <tr style="text-align: right;">
@@ -627,12 +575,9 @@ sns.scatterplot(data = joined_results, x = 'log10 DOWN', y = 'log10 UP', hue='in
                hue_order = ['other'] + interesting_factors)
 sns.despine()
 ```
-
-
     
 ![png](output_34_0.png)
     
-
 
 As you can see, influence of SPI1 seems to be very specific for the down-regulated genes, while STAT6 and MYB appear to be specific to the up-regulated genes! LISA says these factors are influential in our genesets. Let's see if factor expression coincides with influence:
 
@@ -641,8 +586,6 @@ As you can see, influence of SPI1 seems to be very specific for the down-regulat
 sc.pl.umap(rna_data, color = ['STAT6','MYB'])
 ```
 
-
-    
 ![png](output_36_0.png)
     
 
@@ -656,23 +599,7 @@ Now, let's see how we arrived at this result for the up-regulated genes. In the 
 pd.DataFrame(up_metadata['DNase']['selected_dataset_meta'])
 ```
 
-
-
-
 <div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
 <table border="1" class="dataframe">
   <thead>
     <tr style="text-align: right;">
@@ -771,31 +698,28 @@ sns.despine()
 plt.show()
 ```
 
-
-    
 ![png](output_40_0.png)
     
 
+# Lisa FromRegions
 
-# From Regions
+<img src="fromRegions.png" width=400>
 
-*Cool! But we can tailor this test to our data even more.* Since we are working with Mutliome data, we have cells jointly assayed with ATAC-seq and RNA-seq. We can supply our own peaks instead of using public epigenetic data to get results even more specific to our conditions.
+*Results from the public epigenetic data look good, but we can further tailor the Lisa test to our data*. Since we are working with Mutliome data, we have cells jointly assayed with ATAC-seq and RNA-seq. We can supply our own peaks instead of using public epigenetic data to get results even more specific to our conditions.
 
-You don't need multiome data to take advantage of this test, however. [Integrating scATAC and scRNA seq](https://satijalab.org/signac/articles/pbmc_multiomic.html), or conducting an ATAC-seq experiment with some genes already in mind are common situations where you have regions and genes-of-interest.
+You don't need multiome data to take advantage of this test, however. [Integrating scATAC and scRNA seq](https://satijalab.org/signac/articles/pbmc_multiomic.html), or conducting a bulk ATAC-seq experiment with known query genes are common situations where Lisa's FromRegions interface is useful.
 
-The FromRegions test takes a genelist and and a list of regions defining accessibility in your system. Below, we use aggregated reads in a scATAC cluster to define our epigenetic profile, but you may also provide the regions from a bulk ATAC-seq experiment, H3K27ac, etc. *This approach is similar to motif enrichment analysis, but with the additional constrain that your binding sites must be influential on certain genes.*
+The FromRegions test takes a genelist and and a list of regions defining accessibility in your system. Each of these regions may also be accompanied by a positive weight. Below, we use aggregated reads in a scATAC cluster to define our epigenetic profile, but you may also provide the regions from a bulk ATAC-seq experiment, H3K27ac, etc. *While this approach is similar to motif enrichment analysis, it adds the additional constraint that your binding sites must be influential on certain genes.*
 
-### Preprocess ATAC-seq
+### Preprocess ATAC-seq data
 
 10X's CellRanger peak calling algorithm often merges peaks that are nearby, creating wide, nonspecific peaks that may confound motif/tf binding analysis, so here, we download their fragment file and construct the peak-count matrix ourselves.
-
 
 * [10X fragment file](https://cf.10xgenomics.com/samples/cell-arc/1.0.0/pbmc_granulocyte_sorted_3k/pbmc_granulocyte_sorted_3k_atac_fragments.tsv.gz)
 
 Place these files in a subfolder called "data" and decompress the fragment file.
 
 Next, we will call peaks using MACS2:
-
 
 ```python
 !macs2 callpeak -t data/pbmc_granulocyte_sorted_3k_atac_fragments.tsv \
@@ -860,19 +784,11 @@ atac_data = anndata.AnnData(X = peak_counts.tocsr(), obs = pd.DataFrame(barcodes
         var = pd.DataFrame(peaks, columns = ['chrom','start','end']))
 ```
 
-    /Users/alynch/projects/.venvs/lisa_2.1_testing/lib/python3.8/site-packages/anndata/_core/anndata.py:119: ImplicitModificationWarning: Transforming to str index.
-      warnings.warn("Transforming to str index.", ImplicitModificationWarning)
-
-
-
 ```python
 atac_data = atac_data[rna_data.obs.index, :]
 
 atac_data
 ```
-
-
-
 
     View of AnnData object with n_obs × n_vars = 2714 × 78511
         var: 'chrom', 'start', 'end'
@@ -901,14 +817,6 @@ def process_counts(andata):
 process_counts(atac_data)
 ```
 
-
-
-
-    TruncatedSVD(n_components=50)
-
-
-
-
 ```python
 atac_data.obs = atac_data.obs.join(rna_data.obs)
 ```
@@ -920,21 +828,13 @@ Using the UMAP learned from ATAC-seq and the clusters learned from RNA-seq, we c
 sc.pl.umap(atac_data, color='leiden')
 ```
 
-    ... storing 'chrom' as categorical
-    ... storing 'start' as categorical
-    ... storing 'end' as categorical
-
-
-
     
 ![png](output_56_1.png)
     
 
-
 We can create the average accessibility signature of a CD8 T-cell by aggregating reads to the cluster level. Below, I subset the cell-peak matrix for CD8 T-cells, then add the profile of every cell.
 
-# Lisa FromRegions
-
+<img src="cluster_profile.png" width=400>
 
 ```python
 cd8_profile = np.array(atac_data[atac_data.obs.leiden == '2'].X.sum(axis = 0)).reshape(-1)
@@ -947,14 +847,11 @@ This produces an array that contains the number of reads in each peak accross al
 cd8_profile.shape
 ```
 
-
-
-
     (78511,)
 
 
 
-#### Python API
+#### FromRegions Python API
 
 
 ```python
@@ -992,14 +889,11 @@ results, metadata = lisa_test.predict(cd8_up_genes, region_scores= cd8_profile,
     Done!
 
 
-If we inspect the results, we can see STAT6, MYB, and GATA3 again show strong influence on our genes-of-interest. 
-
-
 ```python
 results = pd.DataFrame(results.to_dict())
 ```
 
-### Lisa CLI
+### FromRegions CLI
 
 
 ```python
@@ -1043,30 +937,17 @@ with open('data/cd8_down_genes.txt.metadata.json', 'r') as f:
     metadata = json.loads(f.read())
 ```
 
-## Data Analysis
+## FromRegions Data Analysis
 
+
+If we inspect the results, we can see STAT6, MYB, and GATA3 again show strong influence on our genes-of-interest. 
 
 ```python
 results.head(5)
 ```
 
 
-
-
 <div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
 <table border="1" class="dataframe">
   <thead>
     <tr style="text-align: right;">
@@ -1142,27 +1023,13 @@ results.head(5)
 </div>
 
 
-
+Further, if we compare the p-values of the results using the FromGenes and FromUsers interfaces, they are extremely similar. This indicates that LISA was able to build a very good model for the epigenetic state of a T-cell from public data, as expected. However, if your condition is not well represented by public data, the FromRegions test will provide much stronger predictions.
 
 ```python
 results.sample_id = up_results.sample_id.astype(int)
-```
-
-
-```python
 compare_results = results.merge(up_results[['sample_id', 'summary_p_value']], on = 'sample_id', suffixes = ['_user','_public'])
-```
-
-
-```python
 compare_results[['log10 USER', 'log10 PUBLIC']] = \
     -np.log10(compare_results[['summary_p_value_user','summary_p_value_public']])
-```
-
-Further, if we compare the p-values of the results using the FromGenes and FromUsers interfaces, they are extremely similar. This indicates that LISA was able to build a very good model for the epigenetic state of a T-cell from public data, as expected. However, if your condition is not well represented by public data, the FromRegions test will provide much stronger predictions.
-
-
-```python
 sns.scatterplot(data = compare_results, x = 'log10 PUBLIC', y = 'log10 USER')
 sns.despine()
 ```
