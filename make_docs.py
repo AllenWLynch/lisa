@@ -56,12 +56,7 @@ if __name__ == "__main__":
     with open('python_api.rst', 'w') as f:
         print(api_docs, file = f)
 
-    cli_docs = make_cli_page([oneshot_parser, multi_parser, regions_parser])
+    cli_docs = make_cli_page([oneshot_parser, multi_parser, regions_parser, coverage_parser])
 
     with open('cli.rst', 'w') as f:
         print(cli_docs, file = f)
-    
-
-    
-
-    

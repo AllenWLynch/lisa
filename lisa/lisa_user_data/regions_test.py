@@ -64,7 +64,7 @@ Example::
 
     results_df = pd.DataFrame(results.to_dict())
 
-For more, see `User Guide <docs/user_guide.rst>`_.
+For more, see `User Guide <user_guide.rst>`_.
 
     '''
 
@@ -108,30 +108,12 @@ For more, see `User Guide <docs/user_guide.rst>`_.
             Genes-of-interest, in either Symbol of RefSeqID format. Must provide between 20 to 500 genes.
         bed_path (str): 
             Path to tab-delineated bedfile with columns: chr start end [score]. The score column is optional.
-        rp_map ({"basic", "enhanced"}, scipy.sparse_matrix): 
-            RP map type, currently supports "basic" and "enhanced". User may also pass their own RP map as scipy.sparse_matrix in the shape (genes x regions)
-        rp_decay (float, int): 
-            Decay rate of region influence on gene based on distance from TSS. Increase to prioritize distal regions, decrease to prioritize promoters. Default of 10000 bp is balanced.
-        isd_method {"chipseq", "motifs"}: 
-            Use ChIP-seq data or motifs to mark TF binding locations.
-        background_list (list): 
-            User-specified list of background genes to compare with query_list. Must contain more genes than query list and entire list will be used. If provided, "background_strategy" must be set to "provided".
-        background_strategy {"regulatory","random","provided"}: 
-            Regulatory will sample background genes from a stratified sample of TADs and regulatory states, random will randomly sample from all non-query genes.
-        num_background_genes (int): 
-            Number of genes to use as comparison to query genes. More background genes make test slower, but more stable.
-        seed (int): 
-            Seed for gene selection and regression model initialization.
-        header (bool): 
-            Skip first line of bedfile
-        verbose (int): 
-            Number of levels of log messages to print to stderr
 
     Returns:
         results (lisa.core.utils.LISA_Results): 
             With each key representing a table column, sorted by "summary_p_value" field. The dictionary can be passed directly to a the pandas constructor: ``results_df = pd.DataFrame(results.to_dict())``.
         metadata (dict): 
-            Test metadata. Includes query genes provided and background genes that were selected.
+            Test metadata. Includes query genes provided and background genes that were selected, as well as reg-scores for top 100 factors on selected genes.
         '''
     
         assert(type(header) == bool)
@@ -354,7 +336,7 @@ For more, see `User Guide <docs/user_guide.rst>`_.
             results:
                 lisa.core.utils.LISA_Results with each key representing a table column, sorted by "summary_p_value" field. The results can be passed directly to a the pandas constructor by calling the "to_dict()" command: ``results_df = pd.DataFrame(results.to_dict())``.
             metadata: 
-                Dictionary with test metadata. Includes query genes provided and background genes that were selected.
+                Test metadata. Includes query genes provided and background genes that were selected, as well as reg-scores for top 100 factors on selected genes.
         '''
 
         if region_scores is None:

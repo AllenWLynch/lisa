@@ -21,7 +21,7 @@ _config.read([base_config_path, CONFIG_PATH])
 
 class FromCoverage(LISA_Core):
     '''
-lisa.FromRegions
+lisa.FromCoverage
 ****************
 
 Inputs:
@@ -45,7 +45,7 @@ Example::
 
     results_df = pd.DataFrame(results.to_dict())
 
-For more, see `User Guide <docs/user_guide.rst>`_.
+For more, see `User Guide <user_guide.rst>`_.
     '''
 
     window_size = FromGenes.window_size
@@ -71,22 +71,6 @@ For more, see `User Guide <docs/user_guide.rst>`_.
             Genes-of-interest, in either Symbol of RefSeqID format. Must provide between 20 to 500 genes.
         bigwig_path (str): 
             Path to bigwig file
-        bigWigAverageOverBed_path (str):
-            Path to your installation of bigWigAverageOverBed. You may download it with "conda install -c bioconda ucsc-bigwigaverageoverbed". Then, run "which bigWigAverageOverBed" to find the path to its binaries.
-        rp_map ({"basic_10K", "enhanced_10K"}, scipy.sparse_matrix): 
-            RP map type, currently supports "basic" and "enhanced". User may also pass their own RP map as scipy.sparse_matrix in the shape (genes x regions)
-        isd_method {"chipseq", "motifs"}: 
-            Use ChIP-seq data or motifs to mark TF binding locations.
-        background_list (list): 
-            User-specified list of background genes to compare with query_list. Must contain more genes than query list and entire list will be used. If provided, "background_strategy" must be set to "provided".
-        background_strategy {"regulatory","random","provided"}: 
-            Regulatory will sample background genes from a stratified sample of TADs and regulatory states, random will randomly sample from all non-query genes.
-        num_background_genes (int): 
-            Number of genes to use as comparison to query genes. More background genes make test slower, but more stable.
-        seed (int): 
-            Seed for gene selection and regression model initialization.
-        verbose (int): 
-            Number of levels of log messages to print to stderr
 
     Returns:
         results (lisa.core.utils.LISA_Results): 
@@ -140,7 +124,7 @@ For more, see `User Guide <docs/user_guide.rst>`_.
     def __init__(self, species, coverage_array, rp_map = 'enhanced_10K', isd_method = 'chipseq', verbose = 4, log = None):
         '''
 *class*
-**lisa.FromRegions** (species, regions, rp_map = 'basic', rp_decay = 10000, isd_method = 'chipseq', verbose = 4, log = None)**
+**lisa.FromCoverage** (species, regions, rp_map = 'basic', rp_decay = 10000, isd_method = 'chipseq', verbose = 4, log = None)**
 
     Initialize the LISA test using user-defined regions.
 
@@ -149,7 +133,7 @@ For more, see `User Guide <docs/user_guide.rst>`_.
 
         coverage_array: (1D or Nx1 np.ndarray):
             Array of scores over 1kb bins.
-        sd_method {"chipseq", "motifs"}:
+        isd_method {"chipseq", "motifs"}:
             Use ChIP-seq data or motifs to mark TF binding locations.
         rp_map {"basic_10K", "enhanced_10K"}:
             Choice of RP map, which maps the regulatory influence of a region to a gene. The "basic_10K" model is based simply off distance, with the "enhanced_10K" model masks out the promoter and exon regions of other nearby genes.
@@ -208,8 +192,7 @@ For more, see `User Guide <docs/user_guide.rst>`_.
             results (lisa.core.utils.LISA_Results):
                 Can be passed directly to a the pandas constructor: ``results_df = pd.DataFrame(results.to_dict())``.
             metadata (dict):
-                Dictionary with test metadata. Includes query genes provided and background genes that were selected. This metadata dict also contains information on the accessibility datasets that were selected to represent the chromatin landscape around you genes-of-interest, for example, the tissue and cell line from which the profiles were derived.
-        
+                Test metadata. Includes query genes provided and background genes that were selected, as well as reg-scores for top 100 factors on selected genes.
         '''
         return super().predict(query_list, region_scores = self.coverage_array, background_list=background_list, background_strategy=background_strategy, 
             num_background_genes= num_background_genes, seed=seed)

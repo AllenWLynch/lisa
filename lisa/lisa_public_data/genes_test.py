@@ -41,7 +41,7 @@ Example::
 
     results_df = pd.DataFrame(results.to_dict())
 
-For more, see `user guide <docs/user_guide.rst>`_.
+For more, see `user guide <user_guide.rst>`_.
 
     '''
 
