@@ -14,5 +14,6 @@ a gene are influenced by deleting elements associated with a TF (a process we ca
 
 from .lisa_user_data.regions_test import FromRegions
 from .lisa_public_data.genes_test import FromGenes
+from .lisa_user_data.coverage_test import FromCoverage
 from .core.io import parse_regions_file, parse_macs_file
 from ._version import __version__

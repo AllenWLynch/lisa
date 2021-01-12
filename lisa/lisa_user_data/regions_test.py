@@ -53,7 +53,7 @@ Example::
         genes = [x.strip() for x in genes_file.readlines()]
 
     #Using Bedfile
-    results, metadata = lisa.FromRegions.using_bedfile('hg38', './path_to_bedfile.bed', genes)
+    results, metadata = lisa.FromRegions.using_bedfile('hg38', genes, './path_to_bedfile.bed')
 
     #Using MACS output
     results, metadata = lisa.FromRegions.using_macs_output('hg38', './path_to_macs.xls', genes)
@@ -71,10 +71,10 @@ For more, see `User Guide <docs/user_guide.rst>`_.
     @classmethod
     def get_docs(cls):
         return '\n'.join(x.__doc__ for x in 
-        [cls, cls.using_bedfile, cls.using_macs_output, cls.__init__, cls.predict, cls.get_rp_map, cls.binding_matrix, parse_regions_file])
+        [cls, cls.using_bedfile, cls.using_macs_output, cls.__init__, cls.predict, cls.get_rp_map, cls.get_binding_matrix, parse_regions_file])
 
     @classmethod
-    def using_macs_output(cls, species, xls_path, query_genes, rp_map = 'enhanced', rp_decay = 10000, isd_method = 'chipseq', 
+    def using_macs_output(cls, species, query_genes, xls_path, rp_map = 'enhanced', rp_decay = 10000, isd_method = 'chipseq', 
             background_list = [], background_strategy = 'all', num_background_genes = 3000, seed = 2556, header = False, verbose = 4, log = None):
         '''
 *classmethod*
@@ -93,21 +93,21 @@ For more, see `User Guide <docs/user_guide.rst>`_.
             background_strategy=background_strategy, num_background_genes=num_background_genes, seed=seed)
 
     @classmethod
-    def using_bedfile(cls, species, path, query_genes, rp_map = 'enhanced', rp_decay = 10000, isd_method = 'chipseq', 
+    def using_bedfile(cls, species, query_genes, bed_path, rp_map = 'enhanced', rp_decay = 10000, isd_method = 'chipseq', 
             background_list = [], background_strategy = 'all', num_background_genes = 3000, seed = 2556, header = False, verbose = 4, log = None):
         '''
 *classmethod*
-**lisa.FromRegions.using_bedfile** (cls, species, path, query_genes, rp_map = 'basic', rp_decay = 10000, isd_method = 'chipseq', background_list = [], background_strategy = 'regulatory', num_background_genes = 3000, seed = 2556, header = False, verbose = 4, log = None)**
+**lisa.FromRegions.using_bedfile** (species, query_genes, bed_path, rp_map = 'basic', rp_decay = 10000, isd_method = 'chipseq', background_list = [], background_strategy = 'regulatory', num_background_genes = 3000, seed = 2556, header = False, verbose = 4, log = None)**
 
     Run LISA FromRegions test using a bedfile.
 
     Parameters:
         species: {'hg38', 'mm10'}
 
-        path (str): 
-            Path to tab-delineated bedfile with columns: chr start end [score]. The score column is optional.
         query_genes (list): 
             Genes-of-interest, in either Symbol of RefSeqID format. Must provide between 20 to 500 genes.
+        bed_path (str): 
+            Path to tab-delineated bedfile with columns: chr start end [score]. The score column is optional.
         rp_map ({"basic", "enhanced"}, scipy.sparse_matrix): 
             RP map type, currently supports "basic" and "enhanced". User may also pass their own RP map as scipy.sparse_matrix in the shape (genes x regions)
         rp_decay (float, int): 
@@ -136,7 +136,7 @@ For more, see `User Guide <docs/user_guide.rst>`_.
     
         assert(type(header) == bool)
 
-        region_fields, region_scores = parse_regions_file(path, header)
+        region_fields, region_scores = parse_regions_file(bed_path, header)
 
         lisa = cls(species, region_fields, rp_map = rp_map, rp_decay=rp_decay, isd_method=isd_method, verbose=verbose, log=log)
 

@@ -2,16 +2,16 @@
 
 This notebook demonstrates the use of LISA's CLI and Python interfaces on real single-cell RNA-seq and ATAC-seq data. We'll start our investigation into human PBMC gene regulation using 10X mutliome data, which presents an interesting case when we can use DE genes and ATAC-seq regions to investigate trascription regulation.
 
-* [Lisa FromGenes](<#Lisa FromGenes>)
-  * [Preprocess RNA-seq data](<#Preprocess RNA-seq data>)
-  * [FromGenes Python API](<#FromGenes Python API>)
-  * [FromGenes CLI](<#FromGenes CLI>)
-  * [FromGenes Analysis](<#FromGenes Data Analysis>)
-* [Lisa FromRegions](<#Lisa FromRegions>)
-  * [Preprocess ATAC-seq data](<#Preprocess ATAC-seq data>)
-  * [FromRegions Python API](<#FromRegions Python API>)
-  * [FromRegions CLI](<#FromRegions CLI>)
-  * [FromRegions Data Analysis](<#FromRegions Data Analysis>)
+- [Lisa FromGenes](#lisa-fromgenes)
+    + [Preprocess RNA-seq data](#preprocess-rna-seq-data)
+    + [Python API](#fromgenes-python-api)
+    + [CLI](#fromgenes-cli)
+    + [Data Analysis](#fromgenes-data-analysis)
+- [Lisa FromRegions](#lisa-fromregions)
+    + [Preprocess ATAC-seq data](#preprocess-atac-seq-data)
+    + [Python API](#fromregions-python-api)
+    + [CLI](#fromregions-cli)
+    + [Data Analysis](#fromregions-data-analysis)
 
 # Lisa FromGenes
 
@@ -705,7 +705,7 @@ plt.show()
 
 <img src="fromRegions.png" width=400>
 
-*Results from the public epigenetic data look good, but we can further tailor the Lisa test to our data*. Since we are working with Mutliome data, we have cells jointly assayed with ATAC-seq and RNA-seq. We can supply our own peaks instead of using public epigenetic data to get results even more specific to our conditions.
+Results from the public epigenetic data look good, but we can further tailor the Lisa test to our data. Since we are working with Mutliome data, we have cells jointly assayed with ATAC-seq and RNA-seq. We can supply our own peaks instead of using public epigenetic data to get results even more specific to our conditions.
 
 You don't need multiome data to take advantage of this test, however. [Integrating scATAC and scRNA seq](https://satijalab.org/signac/articles/pbmc_multiomic.html), or conducting a bulk ATAC-seq experiment with known query genes are common situations where Lisa's FromRegions interface is useful.
 
@@ -850,7 +850,6 @@ cd8_profile.shape
     (78511,)
 
 
-
 #### FromRegions Python API
 
 
@@ -929,12 +928,15 @@ with open('./data/cd8_region_profile.bed', 'w') as f:
 
 ```python
 results = pd.read_csv('./data/cd8_regions_test.lisa.tsv', sep = '\t')
-```
 
-
-```python
 with open('data/cd8_down_genes.txt.metadata.json', 'r') as f:
     metadata = json.loads(f.read())
+```
+
+You can also perform the FromRegions test directly on the output of MACS is you do not need to further process the data by addding the "--macs_xls" flag. 
+
+```python
+!lisa regions hg38 -q data/cd8_up_genes.txt -r data/pbmc_peaks.xls --macs_xls --save_metdata > results.tsv
 ```
 
 ## FromRegions Data Analysis
@@ -1035,10 +1037,8 @@ sns.despine()
 ```
 
 
-    
 ![png](output_79_0.png)
     
-
 
 Lastly, the FromRegions test allows the user to inspect the gene-TF influence predicted by LISA to determine potential regulatory circuits. From the metadata return of the lisa test,
 we can extract the delta_reg matrix for our query genes from: ```metadata['Regions']['query_reg_scores']```. This matrix contains the predicted influence on each query gene by the top 100 factors.
@@ -1056,22 +1056,6 @@ query_reg_scores = pd.DataFrame(
 sns.clustermap(query_reg_scores, cmap = sns.color_palette("Reds", as_cmap=True))
 ```
 
-
-
-
-    <seaborn.matrix.ClusterGrid at 0x7feddab2ff70>
-
-
-
-
-    
 ![png](output_82_1.png)
     
-
-
 According to our model for factor influence, our top regulatory factor, STAT6, interacts specifically with some gene clusters. The two main gene clusters contain CD7 and LCK. CD7 is a lymphoid factor implicated in T-cell - B-cell interactions, while LCK is a key signaling transducer of TCR stimulation.
-
-
-```python
-
-```

@@ -84,7 +84,7 @@ class Accesibility_Assay(LISA_RP_Assay):
                 knockouts = list(p.imap(delta_RP_wrapper, iter(KnockoutGenerator(accessibility_profiles, factor_binding, rp_map))))
         else:
 
-            bar = LoadingBar('Performing in-silico knockouts:', accessibility_profiles.shape[1],
+            bar = LoadingBar('Performing in-silico knockouts', accessibility_profiles.shape[1],
                 length=20, cold_start=True)
             self.log.append(bar, update_line = True)
             knockouts = []

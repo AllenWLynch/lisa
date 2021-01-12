@@ -32,6 +32,17 @@ class DataInterface:
     data_path = os.path.join(PACKAGE_PATH, 'data')
 
     @classmethod
+    def get_window_bedfile_str(cls, species, window_size):
+
+        genome = cls.load_genome(species, window_size)
+
+        window_strs = []
+        for i, window in enumerate(genome.list_windows()):
+            window_strs.append(str(window) + '\t' + str(i))
+
+        return '\n'.join(window_strs)
+
+    @classmethod
     def get_metadata_headers(cls, technology):
         return cls._config.get('metadata', technology + '_headers').split(',')
     

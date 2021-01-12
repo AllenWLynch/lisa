@@ -11,10 +11,10 @@ LISA is a statistical test for the influence of Transcription Factors on a set o
 The minimum you need to run LISA is a list of genes-of-interest, but you can also supply your own epigenetic background. For more information, see `Qin et al., 2020 <https://genomebiology.biomedcentral.com/articles/10.1186/s13059-020-1934-6>`_. 
 This implementation extends the original, running faster, reducing dependencies, and adding useful CLI functions for pipeline integration.
 
-Model
+The Model
 -----
 
-The key components of the LISA test are the 
+The key components of the LISA test are the:
   1. profile, a distribution of accessibility over regions in the genome, supplied by user or predicted from public data
   2. hits, the regions where a TF is predicted to bind (through ChIP-seq or motif)
   3. region-gene map, maps the influence of a region to nearby genes.
@@ -25,6 +25,8 @@ When you provide genes-of-interest, LISA finds factors that preferentially affec
 
 .. image:: docs/model_diagram.png
   :width: 400
+
+See the `User Guide <docs/user_guide.md>`_ to see it in action. 
 
 Requirements
 ------------
@@ -87,12 +89,12 @@ LISA's cli offers convenient methods for the most common use cases. See the `API
 
   (lisa_env) $ lisa {command} --help
 
-for parameter descriptions. See the `User Guide <docs/user_guide.rst>`_ for best practices.
+for parameter descriptions. See the `User Guide <docs/user_guide.md>`_ for best practices.
 
 Python Interface
 ~~~~~~~~~~~~~~~~
 
-The python module allows more control over the LISA test and more convenient data analysis. See the `Python API <docs/python_api.rst>`_ and the `User Guide <docs/user_guide.rst>`_.
+The python module allows more control over the LISA test and more convenient data analysis. See the `Python API <docs/python_api.rst>`_ and the `User Guide <docs/user_guide.md>`_.
 
 Changelog
 ---------
@@ -107,6 +109,7 @@ Added
 * New backend interface for faster file transfers
 * Added ability to append more data to backend for future updates, including ATAC-seq epigenetic backgrounds
 * Added more documentation and user guide
+* Appended new ATAC data and reprocessed motifs using JASPAR database
 
 Removed
 ~~~~~~~

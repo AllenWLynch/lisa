@@ -1,6 +1,5 @@
 
 species: hg38
-window_size: 1000
 process_profiles: TRUE
 start_new: TRUE
 
@@ -21,4 +20,6 @@ chromatin_profiles:
 
 motif_data: "data/{species}_motifs.tsv"
 
-cistrome_data: data/mock_cistrome_meta2.tsv
+cistrome_data: data/DC_haveProcessed_20190506_filepath_qc.xls
+
+bigWigAverageOverBed_path: bigWigAverageOverBed

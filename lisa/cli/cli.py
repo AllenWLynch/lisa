@@ -16,7 +16,7 @@ See the `Python API <python_api.rst>`_ for more in-depth description of tests an
 
 '''
 
-from lisa import FromRegions, FromGenes
+from lisa import FromRegions, FromGenes, FromCoverage
 from lisa.core.utils import Log
 from lisa.core.lisa_core import DownloadRequiredError
 from lisa.core.data_interface import DatasetNotFoundError
@@ -30,6 +30,7 @@ from collections import defaultdict
 from shutil import copyfile
 import lisa.cli.test_cli as tests
 from shutil import copyfile
+import numpy as np
 
 from lisa.lisa_public_data.genes_test import _config as public_config
 from lisa.lisa_user_data.regions_test import _config as user_config
@@ -93,10 +94,24 @@ def lisa_regions(args):
     else:
         fn = FromRegions.using_macs_output
 
-    results, metadata = fn(args.species, args.regions, args.query_genes, rp_map = args.rp_map,
+    results, metadata = fn(args.species, args.query_genes, args.regions, rp_map = args.rp_map,
         rp_decay=args.rp_decay, isd_method=args.isd_method, background_list=args.background_list,
         background_strategy=args.background_strategy, num_background_genes = args.num_background_genes,
         seed=args.seed, header = args.header)
+    
+    save_results(args, results, metadata)
+
+def lisa_coverage(args):
+
+    try:
+        args.background_list = args.background_list.readlines()
+    except AttributeError:
+        pass
+
+    results, metadata = FromCoverage.using_bigwig(args.species, args.query_genes, args.bigwig_path, rp_map = args.rp_map,
+        isd_method=args.isd_method, background_list=args.background_list,
+        background_strategy=args.background_strategy, num_background_genes = args.num_background_genes,
+        seed=args.seed)
     
     save_results(args, results, metadata)
 
@@ -156,9 +171,10 @@ def build_common_args(parser):
         dest = 'isd_method', help = 'Use motif hits instead of ChIP-seq peaks to represent TF binding (only recommended if TF-of-interest is not represented in ChIP-seq database).')
     parser.add_argument('--save_metadata', action = 'store_true', default = False, help = 'Save json-formatted metadata from processing each gene list.')
 
-def build_from_genes_args(parser):
+def build_from_genes_args(parser, add_assays = True):
     #parser.add_argument('-c','--cores', required = True, type = int)
-    parser.add_argument('-a','--assays',nargs='+',default=['Direct','H3K27ac','DNase'], choices=['Direct','H3K27ac','DNase'], help = 'Which set of insilico-deletion assays to run.')
+    if add_assays:
+        parser.add_argument('-a','--assays',nargs='+',default=['Direct','H3K27ac','DNase'], choices=['Direct','H3K27ac','DNase'], help = 'Which set of insilico-deletion assays to run.')
     parser.add_argument('--rp_map_style', dest = 'rp_map', choices=public_config.get('lisa_params','rp_map_styles').split(','),
         default= public_config.get('lisa_params','rp_map_styles').split(',')[0], help = 'Which style of rp_map to assess influence of regions on genes. "basic" is stricly distance-based, while "enhanced" masks the exon and promoter regions of nearby genes.')
 
@@ -272,7 +288,6 @@ Example::
     $ lisa regions -r ./regions.bed -q ./genelist.txt --save_metadata > results.tsv
     $ lisa regions -r ./macs_peaks.xls -q ./genelist.txt --macs_xls > results.tsv
 
-
 ''')
 regions_parser.add_argument('species', choices = ['hg38','mm10'], help = 'Find TFs associated with human (hg38) or mouse (mm10) genes')
 regions_required = regions_parser.add_argument_group('required arguments')
@@ -290,19 +305,44 @@ build_common_args(regions_optional)
 regions_optional.add_argument('-h', '--help', action = 'help', default=SUPPRESS)
 regions_parser.set_defaults(func = lisa_regions)
 
-'''#___ LISA bam_test command _____
-bam_parser = subparsers.add_parser('convert-bam', formatter_class = RstFormatter, add_help = False, description = 'Convert a BAM file into a coverage array over bins.')
-bam_parser.add_argument('species', choices = ['hg38','mm10'], help = 'Pileup over hg38 or mm10 genome')
-bam_parser.add_argument('bamfile', type = confirm_file, help = 'BAM file to convert into coverage array')
-bam_parser.add_argument('')'''
+#___ LISA coverage commands _____
+
+coverage_parser = subparsers.add_parser('coverage', formatter_class = RstFormatter, add_help = False, description = '''
+lisa coverage
+------------
+
+You have:
+
+* one genelist
+* bigwig of coverage over the genome
+
+Use LISA to infer TF influence on your geneset using your own coverage data. This test is better suited than the "regions" test when your measure produces wide peaks/areas of influence.
+An example of this is H3K27ac data, which correlates with gene expression similarly to accessibility, but produces wide peaks that may span many distinct TF binding locations.
+
+Example::
+
+    $ lisa coverage -bw ./sample.bigwig -q ./genelist.txt --save_metadata > results.tsv
+
+''')
+coverage_parser.add_argument('species', choices = ['hg38','mm10'], help = 'Find TFs associated with human (hg38) or mouse (mm10) genes')
+coverage_parser.add_argument('-q', '--query_genes', required = True, type = argparse.FileType('r', encoding = 'utf-8'), help = 'user-supplied gene list. One gene per line in either symbol or refseqID format')
+coverage_parser.add_argument('-bw', '--bigwig_path', type = confirm_file, required = True, help = 'Bigwig file describing coverage over the genome.')
+coverage_optional = coverage_parser.add_argument_group('optional arguments')
+build_from_genes_args(coverage_optional, False)
+build_one_list_args(coverage_optional, default_background_strategy='all')
+build_common_args(coverage_optional)
+coverage_optional.add_argument('-h', '--help', action = 'help', default=SUPPRESS)
+coverage_parser.set_defaults(func = lisa_coverage)
 
 #__ download command ___
 
 def lisa_download(args):
-    if args.command in ['oneshot','multi']:
+    if args.command in ['oneshot','multi','coverage']:
         _class = FromGenes
     elif args.command == 'regions':
         _class = FromRegions
+    else:
+        raise AssertionError('Command {} not recognized'.format(args.command))
     if args.url:
         print(_class.get_dataset_url(args.species))
     else:
@@ -310,17 +350,19 @@ def lisa_download(args):
 
 download_data_parser = subparsers.add_parser('download', description = 'Download data from CistromeDB. Use if data recieved is incomplete or malformed.')
 download_data_parser.add_argument('species', choices = ['hg38','mm10'], help = 'Download data associated with human (hg38) or mouse (mm10) genes')   
-download_data_parser.add_argument('command', choices=['oneshot', 'multi', 'regions'], help = 'For which command to download data')
+download_data_parser.add_argument('command', choices=['oneshot', 'multi', 'regions', 'coverage'], help = 'For which command to download data')
 download_data_parser.add_argument('--url', action = 'store_true', help = 'Get url for data download. Does not install data.')
 download_data_parser.set_defaults(func = lisa_download)
 
 #__ install command ___
 
 def install_data(args):
-    if args.command in ['oneshot','multi']:
+    if args.command in ['oneshot','multi','coverage']:
         _class = FromGenes
     elif args.command == 'regions':
         _class = FromRegions
+    else:
+        raise AssertionError('Command {} not recognized'.format(args.command))
     if args.remove:
         os.rename(args.dataset, _class.get_dataset_path(args.species))
     else:
@@ -328,7 +370,7 @@ def install_data(args):
 
 install_data_parser = subparsers.add_parser('install', description = 'Helper command for manually installing Lisa\'s data')
 install_data_parser.add_argument('species', choices = ['hg38','mm10'], help = 'Install data associated with human (hg38) or mouse (mm10) genes')   
-install_data_parser.add_argument('command', choices=['oneshot', 'multi', 'regions'], help = 'For which command to install data')
+install_data_parser.add_argument('command', choices=['oneshot', 'multi', 'regions', 'coverage'], help = 'For which command to install data')
 install_data_parser.add_argument('dataset', type = confirm_file, help = 'Path to downloaded h5 dataset')
 install_data_parser.add_argument('--remove', action = 'store_true', help = 'Delete dataset after installation is complete.')
 install_data_parser.set_defaults(func = install_data)

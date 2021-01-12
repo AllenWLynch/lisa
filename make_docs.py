@@ -1,14 +1,14 @@
 import lisa
-from lisa import FromRegions, FromGenes
+from lisa import FromRegions, FromGenes, FromCoverage
 import argparse
-from lisa.cli.cli import oneshot_parser, multi_parser, regions_parser
+from lisa.cli.cli import oneshot_parser, multi_parser, regions_parser, coverage_parser
 import argparse
 import os
 from argparse import HelpFormatter
 from lisa.cli.cli import RstFormatter
 from lisa.core.utils import Log
 
-def new_format_help(parser):
+def new_format_help(self):
 
     formatter = RstFormatter(prog = self.prog)
 
@@ -51,7 +51,7 @@ def make_api_page(modules):
 
 if __name__ == "__main__":
     
-    api_docs = make_api_page([FromGenes, FromRegions])
+    api_docs = make_api_page([FromGenes, FromRegions, FromCoverage])
 
     with open('python_api.rst', 'w') as f:
         print(api_docs, file = f)

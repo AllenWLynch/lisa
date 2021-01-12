@@ -11,8 +11,8 @@ Installing LISA using pip or conda adds the "lisa" command to your path. LISA's 
 
 Which are used depending on the evidence you have on hand. 
 
-See the `User Guide <docs/user_guide.rst>`_ for more usage information.
-See the `Python API <docs/python_api.rst>`_ for more in-depth description of tests and parameters.
+See the `User Guide <user_guide.rst>`_ for more usage information.
+See the `Python API <python_api.rst>`_ for more in-depth description of tests and parameters.
 
 lisa oneshot
 ------------
@@ -28,8 +28,10 @@ Example::
 
     $ lisa oneshot hg38 ./genelist.txt -b 501 --seed=2556 --save_metadata > results.tsv
 
-usage: lisa oneshot [-h] [-o OUTPUT_PREFIX] [--background_strategy {regulatory,random,provided,all}] [--background_list BACKGROUND_LIST | -b NUM_BACKGROUND_GENES] [-v VERBOSE]
-                            [-a {Direct,H3K27ac,DNase} [{Direct,H3K27ac,DNase} ...]] [--rp_map_style {enhanced_10K,basic_10K}] [--seed SEED] [--use_motifs] [--save_metadata]
+usage: lisa oneshot [-h] [-o OUTPUT_PREFIX] [--background_strategy {regulatory,random,provided,all}]
+                            [--background_list BACKGROUND_LIST | -b NUM_BACKGROUND_GENES] [-v VERBOSE]
+                            [-a {Direct,H3K27ac,DNase} [{Direct,H3K27ac,DNase} ...]] [--rp_map_style {enhanced_10K,basic_10K}] [--seed SEED]
+                            [--use_motifs] [--save_metadata]
                             {hg38,mm10} query_list
 
 positional arguments:
@@ -72,7 +74,8 @@ Example::
 
     $ lisa multi hg38 ./genelists/*.txt -b 501 -o ./results/
 
-usage: lisa multi [-h] -o OUTPUT_PREFIX [-v VERBOSE] [-b NUM_BACKGROUND_GENES] [--random_background] [-a {Direct,H3K27ac,DNase} [{Direct,H3K27ac,DNase} ...]] [--rp_map_style {enhanced_10K,basic_10K}] [--seed SEED]
+usage: lisa multi [-h] -o OUTPUT_PREFIX [-v VERBOSE] [-b NUM_BACKGROUND_GENES] [--random_background]
+                          [-a {Direct,H3K27ac,DNase} [{Direct,H3K27ac,DNase} ...]] [--rp_map_style {enhanced_10K,basic_10K}] [--seed SEED]
                           [--use_motifs] [--save_metadata]
                           {hg38,mm10} query_lists [query_lists ...]
 
@@ -112,10 +115,13 @@ associated score should be positive. Scores are often read-depth at those region
 
 Example::
 
-    $ lisa regions -r ./regions.bed -q ./genelist.txt -b 501 --save_metadata > results.tsv
+    $ lisa regions -r ./regions.bed -q ./genelist.txt --save_metadata > results.tsv
+    $ lisa regions -r ./macs_peaks.xls -q ./genelist.txt --macs_xls > results.tsv
 
-usage: lisa regions -q QUERY_GENES -r REGIONS [--header] [--macs_xls] [--rp_map_style {enhanced,basic}] [--rp_decay RP_DECAY] [-o OUTPUT_PREFIX] [--background_strategy {regulatory,random,provided,all}]
-                            [--background_list BACKGROUND_LIST | -b NUM_BACKGROUND_GENES] [-v VERBOSE] [--seed SEED] [--use_motifs] [--save_metadata] [-h]
+usage: lisa regions -q QUERY_GENES -r REGIONS [--header] [--macs_xls] [--rp_map_style {enhanced,basic}] [--rp_decay RP_DECAY]
+                            [-o OUTPUT_PREFIX] [--background_strategy {regulatory,random,provided,all}]
+                            [--background_list BACKGROUND_LIST | -b NUM_BACKGROUND_GENES] [-v VERBOSE] [--seed SEED] [--use_motifs]
+                            [--save_metadata] [-h]
                             {hg38,mm10}
 
 positional arguments:

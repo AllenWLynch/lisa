@@ -1,5 +1,6 @@
 from lisa.core.lisa_core import LISA_Core
-from lisa.core.data_interface import PACKAGE_PATH, REQURED_DATASET_VERSION
+from lisa.lisa_public_data.genes_test import FromGenes
+from lisa.core.data_interface import PACKAGE_PATH, REQURED_DATASET_VERSION, INSTALL_PATH
 from lisa.core.lisa_core import CONFIG_PATH as base_config_path
 import numpy as np
 from scipy import sparse
@@ -11,51 +12,68 @@ from lisa.lisa_user_data.assays import ISD_Assay
 from lisa.core.data_interface import DataInterface
 from collections import Counter
 from lisa.core.utils import Log, LoadingBar
+import subprocess
+import tempfile
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__),'config.ini')
 _config = configparser.ConfigParser()
 _config.read([base_config_path, CONFIG_PATH])
 
 
-class FromBam(LISA_Core):
+class FromCoverage(LISA_Core):
 
-    window_size = 1000
+    window_size = FromGenes.window_size
 
-    '''@classmethod
-    def convert_bamfile(cls, bam_file, species, window_size = 1000,
-        count_five_prime = True, count_three_prime = False):
+    @classmethod
+    def using_bigwig(cls, species):
+        passed
+
+    @classmethod
+    def _get_genome_bin_path(cls, species):
+        return _config.get('bam_test_params', 'genome_bins').format(data_path = INSTALL_PATH, species = species, window_size = str(cls.window_size))
+
+    @classmethod
+    def _write_genome_bins(cls, species):
+        
+        bedstr = DataInterface.get_window_bedfile_str(species, cls.window_size)
+
+        with open(cls._get_genome_bin_path(species, window_size), 'w') as bed:
+            bed.write(bedstr)
+
+    @classmethod
+    def convert_bigwig(cls, bigwig, species, bigwig_cmd_path):
 
         log = Log()
 
-        genome = DataInterface.load_genome(species, window_size)
+        genome = DataInterface.load_genome(species, cls.window_size)
+        coverage_array = np.zeros(len(genome))
 
-        coverage_array = np.zeros(len(data.genome))
+        log.append('Converting BigWig file to coverage array ...')
 
-        log.append('Converting BAM file to coverage array ...')
+        if not os.path.exists(cls._get_genome_bin_path(species)):
+            log.append('Writing bins ...')
+            cls._write_genome_bins(species)
 
         try:
+
+            temp = tempfile.NamedTemporaryFile('w', delete=False)
+            temp.close()
+
+            process = subprocess.run([bigwig_cmd_path, bigwig, cls._get_genome_bin_path(species), temp.name], capture_output=True)
+
+            if process.returncode == 0:
+
+                with open(temp.name, 'r') as cmd_output:
+                    for line in cmd_output:
+                        fields = line.strip().split('\t')
+                        coverage_array[int(fields[0])] = fields[4]
+                    
+                return coverage_array
             
-            bam = BamParser(bam_file, filter_reads = True)
-
-            bar = LoadingBar('Processing reads:', len(bam) // 1000)
-
-            for i, read in bam:
-
-                if i%1000 == 0:
-                    log.append(bar, update_line = True)
-
-                read = genome_tools.Region(chrom, start, end)
-                try:
-                    windows = data.genome.get_region_windows(read, min_region_overlap_proportion=0.5)
-                    coverage_array[windows] = coverage_array[windows] + 1
-                except genome_tools.BadRegionError:
-                    pass
-
-            return coverage_array
-
+            else:
+                raise AssertionError(process.stderr.decode('utf-8'))
         finally:
-            bam.close()'''
-
+            os.remove(temp.name)
 
 
     def __init__(self, species, coverage_array, rp_map = 'enhanced_10K', isd_method = 'chipseq', verbose = 4, log = None):
@@ -81,12 +99,12 @@ class FromBam(LISA_Core):
         lisa object
         '''
 
-        super().__init__(species, _config, cls.window_size, isd_method= isd_method, verbose=verbose, log = log)
+        super().__init__(species, _config, self.window_size, isd_method= isd_method, verbose=verbose, log = log)
         
         assert(isinstance(coverage_array, np.ndarray)), 'Coverage array must be of type numpy.ndarray'
-        assert(len(coverage_array.shape) == 1 or 1 in coverage_array.shape), 'Coverage array must be 1D array or column/row vector'
+        assert(len(coverage_array.shape) == 1 or (1 in coverage_array.shape and len(coverage_array.shape) == 2)), 'Coverage array must be 1D array or column/row vector'
 
-        coverage_array = coverage_array.reshape(-1,1)
+        coverage_array = coverage_array.reshape(-1)
         assert(len(coverage_array) == len(self.data_interface.genome)), 'Coverage array must be of same length as genome: {} bins'.format(str(len(self.data_interface.genome)))
         self.coverage_array = coverage_array
 

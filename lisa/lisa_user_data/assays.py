@@ -18,6 +18,7 @@ class ISD_Assay(LISA_RP_Assay):
                     gene_mask = gene_mask, accessibility = profile)
 
             self.log.append('Calcuating null RP model ...')
+
             null_rp_matrix = self.make_rp_matrix(profiles = subset_profile, rp_map = subset_rp_map)
 
             self.log.append('Performing knockouts ...')
