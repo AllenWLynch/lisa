@@ -264,12 +264,10 @@ For more, see `User Guide <user_guide.md>`_.
                 var = pd.DataFrame(region_metadata, columns = ['chr','start','end'])
             )
         '''
-        try:
-            self.rp_map
-        except AttributeError:
+        if isinstance(self.rp_map, str):
             self._load_rp_map()
         
-        gene_loc_metadata = [(gene.chrom, gene.start, gene.end, gene.annotation, gene.get_name()) for gene in self.data_interface.gene_loc_set]
+        gene_loc_metadata = [(gene.chromosome, gene.start, gene.end, gene.annotation.get_name()) for gene in self.data_interface.gene_loc_set.regions]
         regions_metadata = [r.to_tuple() for r in self.region_set.regions]
 
         return self.rp_map, gene_loc_metadata, regions_metadata
@@ -308,7 +306,7 @@ For more, see `User Guide <user_guide.md>`_.
 
         regions_metadata = [r.to_tuple() for r in self.region_set.regions]
 
-        return self.factor_binding, regions_metadata, self.data_interface.transpose_metadata(self.factor_metadata, self.isd_method)
+        return self.factor_binding, regions_metadata, self.factor_metadata
 
 
     def predict(self, query_genes, region_scores = None, background_list = [], background_strategy = 'all', num_background_genes = 3000, seed = 2556):
