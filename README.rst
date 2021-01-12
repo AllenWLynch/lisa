@@ -24,7 +24,7 @@ LISA then tests for the influence of a factor on a gene by calculating what prop
 When you provide genes-of-interest, LISA finds factors that preferentially affects these genes over a sampling of background genes.
 
 .. image:: docs/model_diagram.png
-  :width: 400
+  :width: 300
 
 See the `User Guide <docs/user_guide.md>`_ to see it in action. 
 

@@ -11,8 +11,6 @@ def main(species, window_size, cistrome_metadata, motif_metadata, index_files):
     cistrome_metadata.index = cistrome_metadata.index.astype(str)
     motif_metadata = pd.read_csv(motif_metadata, sep = '\t').set_index('dataset_id')
 
-    print(cistrome_metadata)
-
     data = DataInterface(species, window_size= window_size, download_if_not_exists=False,
         make_new=False, load_genes=False)
 

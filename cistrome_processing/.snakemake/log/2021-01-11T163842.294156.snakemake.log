@@ -1,6 +1,0 @@
-Building DAG of jobs...
-MissingInputException in line 152 of /Users/alynch/projects/lisa_project/liulab-lisa/lisa2/cistrome_processing/Snakefile:
-Missing input files for rule format_h5:
-"data/indices/hg38/1000/Motifs_MA0083.3_RUNX1-jaspar.txt"
-"data/indices/hg38/1000/Motifs_MA0162.4_EGR1-jaspar.txt"
-"data/indices/hg38/1000/ChIP-seq_4_EGR1-K562-Erythroblast-Bone Marrow.txt"

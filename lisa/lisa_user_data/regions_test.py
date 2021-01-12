@@ -64,7 +64,7 @@ Example::
 
     results_df = pd.DataFrame(results.to_dict())
 
-For more, see `User Guide <user_guide.rst>`_.
+For more, see `User Guide <user_guide.md>`_.
 
     '''
 
@@ -78,7 +78,7 @@ For more, see `User Guide <user_guide.rst>`_.
             background_list = [], background_strategy = 'all', num_background_genes = 3000, seed = 2556, header = False, verbose = 4, log = None):
         '''
 *classmethod*
-**lisa.FromRegions.using_macs_output** (species, xls_path, query_genes, rp_map = 'enhanced', rp_decay = 10000, isd_method = 'chipseq', background_list = [], background_strategy = 'regulatory', num_background_genes = 3000, seed = 2556, header = False, verbose = 4, log = None)**
+**lisa.FromRegions.using_macs_output** (species, query_genes, xls_path, rp_map = 'enhanced', rp_decay = 10000, isd_method = 'chipseq', background_list = [], background_strategy = 'regulatory', num_background_genes = 3000, seed = 2556, header = False, verbose = 4, log = None)
 
     Use regions defined in MACS .xls file, and take the "pileup" field to be the region's score. 
     All arguments are the same as the "using_bedfile" method, except user must pass "xls_path" as path to MACS2 "{name}.xls" file.
@@ -97,7 +97,7 @@ For more, see `User Guide <user_guide.rst>`_.
             background_list = [], background_strategy = 'all', num_background_genes = 3000, seed = 2556, header = False, verbose = 4, log = None):
         '''
 *classmethod*
-**lisa.FromRegions.using_bedfile** (species, query_genes, bed_path, rp_map = 'basic', rp_decay = 10000, isd_method = 'chipseq', background_list = [], background_strategy = 'regulatory', num_background_genes = 3000, seed = 2556, header = False, verbose = 4, log = None)**
+**lisa.FromRegions.using_bedfile** (species, query_genes, bed_path, rp_map = 'enhanced', rp_decay = 10000, isd_method = 'chipseq', background_list = [], background_strategy = 'regulatory', num_background_genes = 3000, seed = 2556, header = False, verbose = 4, log = None)**
 
     Run LISA FromRegions test using a bedfile.
 
@@ -131,7 +131,7 @@ For more, see `User Guide <user_guide.rst>`_.
     def __init__(self, species, regions, rp_map = 'enhanced', rp_decay = 10000, isd_method = 'chipseq', verbose = 4, log = None):
         '''
 *class*
-**lisa.FromRegions** (species, regions, rp_map = 'basic', rp_decay = 10000, isd_method = 'chipseq', verbose = 4, log = None)**
+**lisa.FromRegions** (species, regions, rp_map = 'enhanced', rp_decay = 10000, isd_method = 'chipseq', verbose = 4, log = None)**
 
     Initialize the LISA test using user-defined regions.
 

@@ -1,4 +1,0 @@
-AttributeError in line 67 of /Users/alynch/projects/lisa_project/liulab-lisa/lisa2/cistrome_processing/Snakefile:
-'DataFrame' object has no attribute 'dataset_id'
-  File "/Users/alynch/projects/lisa_project/liulab-lisa/lisa2/cistrome_processing/Snakefile", line 67, in <module>
-  File "/Users/alynch/projects/.venvs/lisa_2.1_testing/lib/python3.8/site-packages/pandas/core/generic.py", line 5141, in __getattr__

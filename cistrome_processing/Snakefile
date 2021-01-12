@@ -147,7 +147,7 @@ rule get_motif_hits:
     input:
         "data/motif_beds/{species}/{dataset_id}.bed"
     output:
-        "data/indices/{species}/{window_size}/Motifs_{dataset_id}.txt"
+        temp("data/indices/{species}/{window_size}/Motifs_{dataset_id}.txt")
     shell:
         'python ./bin/map_peaks_to_indices.py {wildcards.species} {wildcards.window_size} "{input}" "{output}"'
 
@@ -156,7 +156,7 @@ rule get_chip_hits:
     input:
         lambda wildcards : cistrome_metadata.loc[wildcards.dataset_id].summit
     output:
-        "data/indices/{species}/{window_size}/ChIP-seq_{dataset_id}.txt"
+        temp("data/indices/{species}/{window_size}/ChIP-seq_{dataset_id}.txt")
     shell:
         'python ./bin/map_peaks_to_indices.py {wildcards.species} {wildcards.window_size} "{input}" "{output}"'
 
@@ -172,11 +172,11 @@ if config['process_profiles']:
             name=lambda wildcards : "data/coverage_arrays/{species}/{window_size}/{technology}_{dataset_id}"\
                 .format(species = wildcards.species, window_size = wildcards.window_size, technology = wildcards.technology, dataset_id = wildcards.dataset_id)
         shell:
-            "python bin/compute_cov_array.py {wildcards.species} {input} -n {params.name}"
+            "python bin/compute_coverage_array.py {wildcards.species} {input} -n {params.name}"
 
     rule format_h5:
         input:
-            indices=list(factor_precursors) + list(motif_precursors)
+            indices=list(factor_precursors) + list(motif_precursors),
             arrays=list(profile_precursors)
         output:
             touch(TARGETS)
@@ -184,7 +184,7 @@ if config['process_profiles']:
             motifs=config['motif_data'].format(species = config['species'])
         shell:
             'python ./bin/append_peak_indices.py {config[species]} {config[window_size]} {config[cistrome_data]} {params.motifs} {input.indices} &&'
-            'python ./bin/append_profiles.py {config[species]} {config[window_size]} {config[cistrome_data]} {input.arrays}'
+            ' python ./bin/append_profiles.py {config[species]} {config[window_size]} {config[cistrome_data]} {input.arrays}'
 
 else:
 

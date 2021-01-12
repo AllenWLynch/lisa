@@ -209,9 +209,12 @@ class DataInterface:
             self.set_attributes(group,dict(shape = rp_map.shape))
 
     def get_rp_maps(self):
-
-        with h5.File(self.path, 'a') as data:
-            return list(data['rp_maps'].keys())
+        
+        try:
+            with h5.File(self.path, 'a') as data:
+                return list(data['rp_maps'].keys())
+        except KeyError:
+            return []
 
     def get_rp_map(self, style):
 

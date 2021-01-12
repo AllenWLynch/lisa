@@ -11,13 +11,14 @@ X. Shirley Liu Lab, 2020""",
     author = 'Allen Lynch',
     author_email = 'alynch@ds.dfci.harvard.edu',
     packages = find_packages(),
-    zip_safe = False,
+    zip_safe = True,
     scripts = ['bin/lisa'],
     install_requires = [
         'numpy>=1.19,<2',
         'scipy>=1.5,<2',
         'h5py>=2.10.0,<3',
-        'scikit-learn>=0.23.2,<1'
+        'scikit-learn>=0.23.2,<1',
+        'pyBigWig>=0.3.17,<1'
     ],
     classifiers=[
         "Programming Language :: Python :: 3",

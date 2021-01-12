@@ -1,4 +1,0 @@
-NameError in line 53 of /Users/alynch/projects/lisa_project/liulab-lisa/lisa2/cistrome_processing/Snakefile:
-name 'sample_metadata' is not defined
-  File "/Users/alynch/projects/lisa_project/liulab-lisa/lisa2/cistrome_processing/Snakefile", line 53, in <module>
-  File "/Users/alynch/projects/lisa_project/liulab-lisa/lisa2/cistrome_processing/Snakefile", line 53, in <listcomp>

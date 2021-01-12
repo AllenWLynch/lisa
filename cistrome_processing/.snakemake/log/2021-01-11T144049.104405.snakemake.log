@@ -1,3 +1,0 @@
-KeyError in line 8 of /Users/alynch/projects/lisa_project/liulab-lisa/lisa2/cistrome_processing/Snakefile:
-'cistrome_metadata'
-  File "/Users/alynch/projects/lisa_project/liulab-lisa/lisa2/cistrome_processing/Snakefile", line 8, in <module>

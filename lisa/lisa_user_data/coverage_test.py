@@ -45,7 +45,7 @@ Example::
 
     results_df = pd.DataFrame(results.to_dict())
 
-For more, see `User Guide <user_guide.rst>`_.
+For more, see `User Guide <user_guide.md>`_.
     '''
 
     window_size = FromGenes.window_size
@@ -60,7 +60,7 @@ For more, see `User Guide <user_guide.rst>`_.
         background_strategy = 'all', num_background_genes = 3000, seed = 2556, verbose = 4, log = None):
         '''
 *classmethod*
-**lisa.FromCoverage.using_bigwig** (species, query_genes, bigwig_path, rp_map = 'basic', rp_decay = 10000, isd_method = 'chipseq', background_list = [], background_strategy = 'regulatory', num_background_genes = 3000, seed = 2556, header = False, verbose = 4, log = None)**
+**lisa.FromCoverage.using_bigwig** (species, query_genes, bigwig_path, rp_map = 'basic', rp_decay = 10000, isd_method = 'chipseq', background_list = [], background_strategy = 'all', num_background_genes = 3000, seed = 2556, header = False, verbose = 4, log = None)
 
     Run LISA FromCoverage test using a bigwig coverage file.
 
@@ -124,7 +124,7 @@ For more, see `User Guide <user_guide.rst>`_.
     def __init__(self, species, coverage_array, rp_map = 'enhanced_10K', isd_method = 'chipseq', verbose = 4, log = None):
         '''
 *class*
-**lisa.FromCoverage** (species, regions, rp_map = 'basic', rp_decay = 10000, isd_method = 'chipseq', verbose = 4, log = None)**
+**lisa.FromCoverage** (species, regions, rp_map = 'enhanced_10K', rp_decay = 10000, isd_method = 'chipseq', verbose = 4, log = None)
 
     Initialize the LISA test using user-defined regions.
 

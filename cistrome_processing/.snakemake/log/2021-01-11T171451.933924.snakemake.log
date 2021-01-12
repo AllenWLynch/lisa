@@ -1,4 +1,0 @@
-Building DAG of jobs...
-Relative file path './data/4_sort_summits.bed' starts with './'. This is redundant and strongly discouraged. It can also lead to inconsistent results of the file-matching approach used by Snakemake. You can simply omit the './' for relative file paths.
-Nothing to be done.
-Complete log: /Users/alynch/projects/lisa_project/liulab-lisa/lisa2/cistrome_processing/.snakemake/log/2021-01-11T171451.933924.snakemake.log

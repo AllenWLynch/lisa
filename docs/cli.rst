@@ -8,7 +8,6 @@ Installing LISA using pip or conda adds the "lisa" command to your path. LISA's 
 * `lisa oneshot`_ : one genelist
 * `lisa multi`_ : multiple genelists
 * `lisa regions`_ : one genelist and a list of regions
-* `lisa coverage`_: one genelist and coverage over genome as BigWig file
 
 Which are used depending on the evidence you have on hand. 
 
@@ -31,10 +30,13 @@ Example::
 
 ::
 
-    usage: lisa oneshot [-h] [-o OUTPUT_PREFIX] [--background_strategy {regulatory,random,provided,all}]
-                                [--background_list BACKGROUND_LIST | -b NUM_BACKGROUND_GENES] [-v VERBOSE]
-                                [-a {Direct,H3K27ac,DNase} [{Direct,H3K27ac,DNase} ...]] [--rp_map_style {enhanced_10K,basic_10K}] [--seed SEED]
-                                [--use_motifs] [--save_metadata]
+    usage: lisa oneshot [-h] [-o OUTPUT_PREFIX]
+                                [--background_strategy {regulatory,random,provided,all}]
+                                [--background_list BACKGROUND_LIST | -b NUM_BACKGROUND_GENES]
+                                [-v VERBOSE]
+                                [-a {Direct,H3K27ac,DNase} [{Direct,H3K27ac,DNase} ...]]
+                                [--rp_map_style {enhanced_10K,basic_10K}]
+                                [--seed SEED] [--use_motifs] [--save_metadata]
                                 {hg38,mm10} query_list
 
     positional arguments:
@@ -79,9 +81,11 @@ Example::
 
 ::
 
-    usage: lisa multi [-h] -o OUTPUT_PREFIX [-v VERBOSE] [-b NUM_BACKGROUND_GENES] [--random_background]
-                              [-a {Direct,H3K27ac,DNase} [{Direct,H3K27ac,DNase} ...]] [--rp_map_style {enhanced_10K,basic_10K}] [--seed SEED]
-                              [--use_motifs] [--save_metadata]
+    usage: lisa multi [-h] -o OUTPUT_PREFIX [-v VERBOSE]
+                              [-b NUM_BACKGROUND_GENES] [--random_background]
+                              [-a {Direct,H3K27ac,DNase} [{Direct,H3K27ac,DNase} ...]]
+                              [--rp_map_style {enhanced_10K,basic_10K}]
+                              [--seed SEED] [--use_motifs] [--save_metadata]
                               {hg38,mm10} query_lists [query_lists ...]
 
     positional arguments:
@@ -125,45 +129,48 @@ Example::
 
 ::
 
-  usage: lisa regions -q QUERY_GENES -r REGIONS [--header] [--macs_xls] [--rp_map_style {enhanced,basic}] [--rp_decay RP_DECAY]
-                              [-o OUTPUT_PREFIX] [--background_strategy {regulatory,random,provided,all}]
-                              [--background_list BACKGROUND_LIST | -b NUM_BACKGROUND_GENES] [-v VERBOSE] [--seed SEED] [--use_motifs]
-                              [--save_metadata] [-h]
-                              {hg38,mm10}
+    usage: lisa regions -q QUERY_GENES -r REGIONS [--header] [--macs_xls]
+                                [--rp_map_style {enhanced,basic}]
+                                [--rp_decay RP_DECAY] [-o OUTPUT_PREFIX]
+                                [--background_strategy {regulatory,random,provided,all}]
+                                [--background_list BACKGROUND_LIST | -b NUM_BACKGROUND_GENES]
+                                [-v VERBOSE] [--seed SEED] [--use_motifs]
+                                [--save_metadata] [-h]
+                                {hg38,mm10}
 
-  positional arguments:
-    {hg38,mm10}           Find TFs associated with human (hg38) or mouse (mm10) genes
+    positional arguments:
+      {hg38,mm10}           Find TFs associated with human (hg38) or mouse (mm10) genes
 
-  required arguments:
-    -q QUERY_GENES, --query_genes QUERY_GENES
-                          user-supplied gene list. One gene per line in either symbol or refseqID format (default: None)
-    -r REGIONS, --regions REGIONS
-                          Tad-delineated bed file with columns: chr, start, end[, score]. The score column is optional. If not provided, LISA will assign each region a uniform weight. (default: None)
+    required arguments:
+      -q QUERY_GENES, --query_genes QUERY_GENES
+                            user-supplied gene list. One gene per line in either symbol or refseqID format (default: None)
+      -r REGIONS, --regions REGIONS
+                            Tad-delineated bed file with columns: chr, start, end[, score]. The score column is optional. If not provided, LISA will assign each region a uniform weight. (default: None)
 
-  optional arguments:
-    --header              Bed file has header row as first row. The header row may contain  (default: False)
-    --macs_xls            If provided, regions file is a MACS2 .xls output file, and the "pileup" field is taken to be the region score. (default: False)
-    --rp_map_style {enhanced,basic}
-    --rp_decay RP_DECAY   Distance in base-pairs in which the influence of a region on a gene decays by half. Increase for more weight on distal elements, decrease for more weight on promoter elements. (default: 10000)
-    -o OUTPUT_PREFIX, --output_prefix OUTPUT_PREFIX
-                          Output file prefix. If left empty, will write results to stdout. (default: None)
-    --background_strategy {regulatory,random,provided,all}
-                          Background genes selection strategy. LISA samples background genes to compare to user's genes-of-interest from a diverse
-                                  regulatory background (regulatory - recommended), randomly from all genes (random), or uses a user-provided list (provided).
-                                  (default: all)
-    --background_list BACKGROUND_LIST
-                          user-supplied list of backgroung genes. Used when --background_strategy flag is set to "provided" (default: None)
-    -b NUM_BACKGROUND_GENES, --num_background_genes NUM_BACKGROUND_GENES
-                          Number of sampled background genes to compare to user-supplied genes (default: 3000)
-    -v VERBOSE, --verbose VERBOSE
-    --seed SEED           Random seed for gene selection. Allows for reproducing exact results. (default: 2556)
-    --use_motifs          Use motif hits instead of ChIP-seq peaks to represent TF binding (only recommended if TF-of-interest is not represented in ChIP-seq database). (default: chipseq)
-    --save_metadata       Save json-formatted metadata from processing each gene list. (default: False)
-    -h, --help
+    optional arguments:
+      --header              Bed file has header row as first row. The header row may contain  (default: False)
+      --macs_xls            If provided, regions file is a MACS2 .xls output file, and the "pileup" field is taken to be the region score. (default: False)
+      --rp_map_style {enhanced,basic}
+      --rp_decay RP_DECAY   Distance in base-pairs in which the influence of a region on a gene decays by half. Increase for more weight on distal elements, decrease for more weight on promoter elements. (default: 10000)
+      -o OUTPUT_PREFIX, --output_prefix OUTPUT_PREFIX
+                            Output file prefix. If left empty, will write results to stdout. (default: None)
+      --background_strategy {regulatory,random,provided,all}
+                            Background genes selection strategy. LISA samples background genes to compare to user's genes-of-interest from a diverse
+                                    regulatory background (regulatory - recommended), randomly from all genes (random), or uses a user-provided list (provided).
+                                    (default: all)
+      --background_list BACKGROUND_LIST
+                            user-supplied list of backgroung genes. Used when --background_strategy flag is set to "provided" (default: None)
+      -b NUM_BACKGROUND_GENES, --num_background_genes NUM_BACKGROUND_GENES
+                            Number of sampled background genes to compare to user-supplied genes (default: 3000)
+      -v VERBOSE, --verbose VERBOSE
+      --seed SEED           Random seed for gene selection. Allows for reproducing exact results. (default: 2556)
+      --use_motifs          Use motif hits instead of ChIP-seq peaks to represent TF binding (only recommended if TF-of-interest is not represented in ChIP-seq database). (default: chipseq)
+      --save_metadata       Save json-formatted metadata from processing each gene list. (default: False)
+      -h, --help
 
 
 lisa coverage
--------------
+------------
 
 You have:
 
@@ -178,36 +185,39 @@ Example::
     $ lisa coverage -bw ./sample.bigwig -q ./genelist.txt --save_metadata > results.tsv
 
 ::
+    usage: lisa coverage -q QUERY_GENES -bw BIGWIG_PATH
+                                [--rp_map_style {enhanced_10K,basic_10K}]
+                                [-o OUTPUT_PREFIX]
+                                [--background_strategy {regulatory,random,provided,all}]
+                                [--background_list BACKGROUND_LIST | -b NUM_BACKGROUND_GENES]
+                                [-v VERBOSE] [--seed SEED] [--use_motifs]
+                                [--save_metadata] [-h]
+                                {hg38,mm10}
 
-  usage: lisa coverage -q QUERY_GENES -bw BIGWIG_PATH [--rp_map_style {enhanced_10K,basic_10K}] [-o OUTPUT_PREFIX]
-                              [--background_strategy {regulatory,random,provided,all}] [--background_list BACKGROUND_LIST | -b NUM_BACKGROUND_GENES]
-                              [-v VERBOSE] [--seed SEED] [--use_motifs] [--save_metadata] [-h]
-                              {hg38,mm10}
+    positional arguments:
+      {hg38,mm10}           Find TFs associated with human (hg38) or mouse (mm10) genes
 
-  positional arguments:
-    {hg38,mm10}           Find TFs associated with human (hg38) or mouse (mm10) genes
+    optional arguments:
+      -q QUERY_GENES, --query_genes QUERY_GENES
+                            user-supplied gene list. One gene per line in either symbol or refseqID format (default: None)
+      -bw BIGWIG_PATH, --bigwig_path BIGWIG_PATH
+                            Bigwig file describing coverage over the genome. (default: None)
 
-  optional arguments:
-    -q QUERY_GENES, --query_genes QUERY_GENES
-                          user-supplied gene list. One gene per line in either symbol or refseqID format (default: None)
-    -bw BIGWIG_PATH, --bigwig_path BIGWIG_PATH
-                          Bigwig file describing coverage over the genome. (default: None)
-
-  optional arguments:
-    --rp_map_style {enhanced_10K,basic_10K}
-                          Which style of rp_map to assess influence of regions on genes. "basic" is stricly distance-based, while "enhanced" masks the exon and promoter regions of nearby genes. (default: enhanced_10K)
-    -o OUTPUT_PREFIX, --output_prefix OUTPUT_PREFIX
-                          Output file prefix. If left empty, will write results to stdout. (default: None)
-    --background_strategy {regulatory,random,provided,all}
-                          Background genes selection strategy. LISA samples background genes to compare to user's genes-of-interest from a diverse
-                                  regulatory background (regulatory - recommended), randomly from all genes (random), or uses a user-provided list (provided).
-                                  (default: all)
-    --background_list BACKGROUND_LIST
-                          user-supplied list of backgroung genes. Used when --background_strategy flag is set to "provided" (default: None)
-    -b NUM_BACKGROUND_GENES, --num_background_genes NUM_BACKGROUND_GENES
-                          Number of sampled background genes to compare to user-supplied genes (default: 3000)
-    -v VERBOSE, --verbose VERBOSE
-    --seed SEED           Random seed for gene selection. Allows for reproducing exact results. (default: 2556)
-    --use_motifs          Use motif hits instead of ChIP-seq peaks to represent TF binding (only recommended if TF-of-interest is not represented in ChIP-seq database). (default: chipseq)
-    --save_metadata       Save json-formatted metadata from processing each gene list. (default: False)
-    -h, --help
+    optional arguments:
+      --rp_map_style {enhanced_10K,basic_10K}
+                            Which style of rp_map to assess influence of regions on genes. "basic" is stricly distance-based, while "enhanced" masks the exon and promoter regions of nearby genes. (default: enhanced_10K)
+      -o OUTPUT_PREFIX, --output_prefix OUTPUT_PREFIX
+                            Output file prefix. If left empty, will write results to stdout. (default: None)
+      --background_strategy {regulatory,random,provided,all}
+                            Background genes selection strategy. LISA samples background genes to compare to user's genes-of-interest from a diverse
+                                    regulatory background (regulatory - recommended), randomly from all genes (random), or uses a user-provided list (provided).
+                                    (default: all)
+      --background_list BACKGROUND_LIST
+                            user-supplied list of backgroung genes. Used when --background_strategy flag is set to "provided" (default: None)
+      -b NUM_BACKGROUND_GENES, --num_background_genes NUM_BACKGROUND_GENES
+                            Number of sampled background genes to compare to user-supplied genes (default: 3000)
+      -v VERBOSE, --verbose VERBOSE
+      --seed SEED           Random seed for gene selection. Allows for reproducing exact results. (default: 2556)
+      --use_motifs          Use motif hits instead of ChIP-seq peaks to represent TF binding (only recommended if TF-of-interest is not represented in ChIP-seq database). (default: chipseq)
+      --save_metadata       Save json-formatted metadata from processing each gene list. (default: False)
+      -h, --help

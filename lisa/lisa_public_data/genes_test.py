@@ -41,7 +41,7 @@ Example::
 
     results_df = pd.DataFrame(results.to_dict())
 
-For more, see `user guide <user_guide.rst>`_.
+For more, see `user guide <user_guide.md>`_.
 
     '''
 
@@ -55,7 +55,7 @@ For more, see `user guide <user_guide.rst>`_.
     def __init__(self, species, rp_map = 'enhanced_10K', assays = ['Direct','H3K27ac','DNase'], isd_method = 'chipseq', verbose = True, log = None):
         '''
 *class*
-**lisa.FromGenes** (species, rp_map = 'basic_10K', assays = ['Direct','H3K27ac','DNase'], isd_method = 'chipseq', verbose = True, log = None)
+**lisa.FromGenes** (species, rp_map = 'enhanced_10K', assays = ['Direct','H3K27ac','DNase'], isd_method = 'chipseq', verbose = True, log = None)
 
     Initialize the LISA test using public data.
 
