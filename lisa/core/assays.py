@@ -1,7 +1,7 @@
 import numpy as np
 from scipy import stats, sparse
 import os
-from multiprocessing import Pool
+import warnings
 
 def get_delta_RP(profile, binding_data, rp_map):
     '''
@@ -13,11 +13,11 @@ def get_delta_RP(profile, binding_data, rp_map):
 
     returns: gene x TF x 1 matrix of delta RPs
     '''
-    return np.array(rp_map.dot(binding_data.astype(np.bool).multiply(profile.reshape((-1,1)))).todense())[:,np.newaxis,:]
+    return np.array(rp_map.dot(binding_data.astype(np.bool).multiply(profile.reshape((-1,1)))).todense())
 
 #distributes arguments for get_delta_RP function, to be used by multiprocessing module
 def delta_RP_wrapper(x):
-    return get_delta_RP(*x)
+    return get_delta_RP(*x)[:,np.newaxis,:]
 
 def mannu_test_function(x):
     query, background = x
@@ -29,28 +29,31 @@ def mannu_test_function(x):
         return (None, 1.0)
 
 def get_deltaRP_activation(rp_0, rp_knockout):
-    """
-    rp_knockout: is a datacube of shape (genes, samples, TFs),
-    this method must implement a transformation into a genes x TFs matrix, sumarrizing the dataset-axis effects
-    """
-    #subtract define deltaX to be the log2 of the fraction of knocked-out RP
-    deltaX = np.log2(rp_0 - rp_knockout + 1) - np.log2(rp_0 + 1)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        deltaX = np.sqrt(np.where(rp_0 == 0, 0, rp_knockout/rp_0))
     
-    #flip sign so that more knockout = more deltaR
-    return -deltaX
+    return deltaX
 
+def transform_RP(x):
+    return np.sqrt(x)
+
+'''def transform_RP(x):
+    return np.log(x + 1)
+
+def get_deltaRP_activation(rp_0, rp_knockout):
+    return -1 * np.log2(1 - rp_knockout/(rp_0 + 0.01))'''
 
 class LISA_RP_Assay:
 
-    def __init__(self, *, technology, config, log, metadata, rp_map, factor_binding):
-        self.config = config
+    def __init__(self, *, technology, data_interface, log, rp_map, factor_binding, factor_dataset_ids):
+        self.data_interface = data_interface
         self.technology = technology
         self.log = log
-        self.loaded = False
-        self.metadata = metadata
         self.rp_map = rp_map
         self.factor_binding = factor_binding
-
+        self.factor_dataset_ids = factor_dataset_ids
+    
     @staticmethod
     def make_subset_rp_map(*,rp_map, factor_binding, gene_mask, accessibility):
         
@@ -63,17 +66,6 @@ class LISA_RP_Assay:
         subset_accessibility = accessibility[bin_mask, :]
         
         return subset_accessibility, subset_factor_binding, subset_rp_map
-
-    def load_rp_matrix(self, data_object):
-
-        self.log.append('Loading {} RP matrix ...'.format(self.technology))
-        
-        dataset_ids = data_object[self.config.get('accessibility_assay', 'reg_potential_dataset_ids').format(technology = self.technology)][...].astype(str)
-
-        rp_matrix = data_object[self.config.get('accessibility_assay', 'reg_potential_matrix').format(technology = self.technology)][...]
-        
-        self.loaded = True
-        return rp_matrix, dataset_ids
 
     @staticmethod
     def make_rp_matrix(*, profiles, rp_map):
@@ -93,22 +85,24 @@ class LISA_RP_Assay:
         #for each TF, calculate p-value of difference in delta-R distributions between query and background genes
         test_parameters = list(zip(query_delta.T, background_delta.T))
 
-        try:
-            self.cores
-        except AttributeError:
-            p_vals = [
-                mannu_test_function((q,b)) for q,b in test_parameters
-            ]
-        else:
-            with Pool(self.cores) as p:
-                p_vals = p.map(mannu_test_function, test_parameters)
+        p_vals = [
+            mannu_test_function((q,b)) for q,b in test_parameters
+        ]
 
         _, p_values = list(zip(*p_vals))
 
         return p_values
 
-    def get_info(self):
-        raise NotImplementedError()
+    @staticmethod
+    def get_delta_reg_score_matrix(p_values, delta_reg_scores, label_vector, top_n = 100):
+
+        label_vector = label_vector.astype(np.bool)
+        
+        most_significant_datasets = np.argsort(p_values)[:top_n]
+        narrowed_reg_scores = delta_reg_scores[:, most_significant_datasets]
+
+        return narrowed_reg_scores[label_vector], narrowed_reg_scores[~label_vector],  most_significant_datasets
+
 
     def predict(self, gene_mask, label_vector, *args, data_object = None, debug = False, **kwargs):
         raise NotImplementedError()

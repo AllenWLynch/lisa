@@ -7,24 +7,22 @@ import os
 
 class ISD_Assay(LISA_RP_Assay):
 
-    def __init__(self, region_scores, **kwargs):
-        super().__init__(**kwargs, technology = 'Regions', metadata = [])
-        self.region_scores = region_scores
-
-    def predict(self, gene_mask, label_vector, *args,**kwargs):
+    def predict(self, gene_mask, label_vector,*,region_scores,**kwargs):
 
         with self.log.section('Modeling insilico deletions:'):
 
-            profile = self.region_scores[:, np.newaxis]
+            profile = (region_scores/region_scores.sum() * 1e5)[:,np.newaxis]
 
-            factor_sums = self.factor_binding.sum(axis = 0)
+            subset_profile, subset_factor_binding, subset_rp_map = \
+                self.make_subset_rp_map(rp_map = self.rp_map, factor_binding = self.factor_binding,
+                    gene_mask = gene_mask, accessibility = profile)
 
-            subset_rp_map = self.rp_map[gene_mask, :]
             self.log.append('Calcuating null RP model ...')
-            null_rp_matrix = self.make_rp_matrix(profiles = profile, rp_map = subset_rp_map)
+
+            null_rp_matrix = self.make_rp_matrix(profiles = subset_profile, rp_map = subset_rp_map)
 
             self.log.append('Performing knockouts ...')
-            delta_RP = np.squeeze(get_delta_RP(profile, self.factor_binding, subset_rp_map).transpose(0,2,1), axis=-1)
+            delta_RP = get_delta_RP(subset_profile, subset_factor_binding, subset_rp_map)
 
             self.log.append('Calculating Δ regulatory score ...')
             delta_reg_scores = get_deltaRP_activation(null_rp_matrix, delta_RP)
@@ -32,9 +30,23 @@ class ISD_Assay(LISA_RP_Assay):
             self.log.append('Calculating p-values ...')
             p_vals = self.get_delta_RP_p_value(delta_reg_scores, label_vector)
 
+            query_reg_score_matrix, background_reg_score_matrix, top_factor_idx = self.get_delta_reg_score_matrix(p_vals, delta_reg_scores, label_vector)
+
+            '''self.debug = dict(
+                profile = profile,
+                gene_mask = gene_mask,
+                label_vector = label_vector,
+                subset_rp_map = subset_rp_map,
+                null_rp_matrix = null_rp_matrix,
+                delta_RP_matrix = delta_RP,
+                delta_reg_scores = delta_reg_scores,
+            )'''
+
         self.log.append('Done!')
 
-        return p_vals
-
-    def get_info(self):
-        return dict()
+        return p_vals, dict(
+            dataset_ids = list(np.array(self.factor_dataset_ids)[top_factor_idx]),
+            query_reg_scores = query_reg_score_matrix.tolist(),
+            background_reg_scores = background_reg_score_matrix.tolist()
+        )
+        

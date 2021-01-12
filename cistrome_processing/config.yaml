@@ -1,0 +1,23 @@
+
+species: hg38
+process_profiles: TRUE
+start_new: TRUE
+
+factor_hit_names: 
+  - tf
+  - not sure
+  - predicted transcription factor
+  - predicted chromatin regulator
+  - cr
+  - both predicted transcription factor and chromatin regulator
+  - other 
+  - None
+
+chromatin_profiles: 
+  - DNase
+  - H3K27ac
+  - ATAC
+
+motif_data: "data/{species}_motifs.tsv"
+
+cistrome_data: data/mock_cistrome_meta2.tsv

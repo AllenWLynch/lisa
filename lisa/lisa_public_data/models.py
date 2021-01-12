@@ -21,6 +21,7 @@ import numpy as np
 from sklearn.exceptions import ConvergenceWarning
 import warnings
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
+from lisa.core.assays import get_deltaRP_activation, transform_RP
 
 class EstimatorInterface(BaseEstimator):
     #Wraps the sklearn Estimator class, and enforces that the user implement a "fit" and "get_info" method
@@ -92,10 +93,12 @@ class LR_BinarySearch_SampleSelectionModel(SampleSelectionModel):
         # Normalize with mean centering and log transformation
         index_array = np.arange(rp_matrix.shape[1])
 
-        X = StandardScaler(with_std = False).fit_transform( np.log2(rp_matrix + 1) )
+        X = StandardScaler(with_std = False).fit_transform( transform_RP(rp_matrix) )
 
         #narrow features with anova selection
-        anova_featues = SelectKBest(f_classif, k=self.num_anova_features).fit(X, labels).get_support()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            anova_featues = SelectKBest(f_classif, k=self.num_anova_features).fit(X, labels).get_support()
         #get indices mapping anova features to original features
         index_array = index_array[anova_featues]
         #subset selected features
@@ -143,7 +146,7 @@ class LR_ChromatinModel(ChromatinModel):
 
         self.normalizer = StandardScaler(with_std = False)
 
-        X0 = self.normalizer.fit_transform( np.log2(self.rp_0 + 1)  )
+        X0 = self.normalizer.fit_transform( transform_RP(self.rp_0) )
 
         #define a classifier for query vs background genes
         classifier = LogisticRegression(penalty = self.penalty, solver = 'lbfgs' if self.penalty == 'l2' else 'liblinear', random_state = 777)
@@ -161,10 +164,12 @@ class LR_ChromatinModel(ChromatinModel):
         this method must implement a transformation into a genes x TFs matrix, sumarrizing the dataset-axis effects
         """
         #subtract define deltaX to be the log2 of the fraction of knocked-out RP
-        deltaX = np.log2(self.rp_0[:,:,np.newaxis] - rp_knockout + 1) - np.log2(self.rp_0[:,:,np.newaxis] + 1)
+        #deltaX = np.log2(self.rp_0[:,:,np.newaxis] - rp_knockout + PSEUDOCOUNT) - np.log2(self.rp_0[:,:,np.newaxis] + PSEUDOCOUNT)
+        
+        deltaX = get_deltaRP_activation(self.rp_0[:,:,np.newaxis], rp_knockout)
         
         #flip sign so that more knockout = more deltaR
-        return -1 * deltaX.transpose(0,2,1).dot(self.model.coef_.reshape(-1))
+        return deltaX.transpose(0,2,1).dot(self.model.coef_.reshape(-1))
 
 
     def get_info(self):
@@ -173,28 +178,3 @@ class LR_ChromatinModel(ChromatinModel):
             coefs = list(np.squeeze(self.model.coef_)),
             auc_score = self.grid_search.best_score_
         )
-
-class FakeModel():
-    def __init__(self, n):
-        self.coef_ = np.ones(n)
-        self.intercept_ = 0
-    
-class UnweightedChromatinModel(ChromatinModel):
-
-    def __init__(self):
-        pass
-
-    def fit(self, rp_matrix, labels):
-
-        self.rp_0 = rp_matrix
-
-        self.normalizer = StandardScaler(with_std = False)
-
-        X0 = self.normalizer.fit_transform( np.log2(self.rp_0 + 1)  )
-
-        self.model = FakeModel(rp_matrix.shape[1])
-
-        return self
-
-    def get_info(self):
-        return dict()

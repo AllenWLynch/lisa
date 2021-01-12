@@ -15,10 +15,10 @@ def ragged_array_to_sparse_matrix(indices, values, col_length):
     ])
 
 def indices_list_to_sparse_array(indices_list, num_bins):
-    return sparse.hstack([
-        sparse.csc_matrix(
+    return sparse.vstack([
+        sparse.csr_matrix(
             (np.ones_like(ind), ind, [0, len(ind)]),
-            shape = (num_bins, 1)
+            shape = (1, num_bins)
         )
         for ind in indices_list
     ])
@@ -81,38 +81,19 @@ class Log:
                 end = '' if update_line else end, 
                 file = self.target)
 
-
-class Metadata:
-    '''
-    key-indexed tabular format based on dictionary
-    '''
-    def __init__(self, metadata_path, print_headers):
-        self.metadata = self.load_metadata(metadata_path)
-        self.metadata_headers = print_headers
-
-    @staticmethod
-    def load_metadata(metadata_path):
-        #reformat metadata tsv into conventiant id-indexed dictionary
-        with open(metadata_path, 'r', encoding = 'latin') as metdata_file:
-            metadata = [[field.strip().replace(',','-') for field in line.split('\t')] for line in metdata_file.readlines()]
-                                
-        meta_headers, metadata = metadata[0], metadata[1:]
-
-        return {metaline[0] : dict(zip(meta_headers[1:], metaline[1:])) for metaline in metadata}
-
-    def select(self, sample_ids):
-        return dict(
-            sample_id = sample_ids,
-            **{
-                header : [self.metadata[_id][header] for _id in sample_ids]
-                for header in self.metadata_headers 
-            }
-        )
-
-
 class LISA_Results:
     '''
-    Column-indexed tabular format for storing rows of data
+Column-indexed tabular format for processing and storing rows of data. This is the
+return type of the LISA test, and allows for convenient reformatting to tsv and 
+pandas DataFrame
+
+Example ::
+
+    >>> type(results)
+    lisa.core.utils.LISA_Results
+    >>> results_df = pd.DataFrame(results.to_dict())
+    >>> print(results.to_tsv())
+
     '''
     @classmethod
     def fromdict(cls, **kwargs):
@@ -167,7 +148,23 @@ class LISA_Results:
     def _transpose_table(table):
         return [list(l) for l in list(zip(*table))]
 
-    def todict(self):
+    def to_dict(self):
+        '''
+    Reformats results object to dictionary, where each key is a column, and each value is an array of the associated values. 
+    By default, the rows are sorted by the "summary_p_value" field.
+
+    Returns
+    -------
+
+    dict
+        results dictionary
+
+    Example ::
+
+        results, metadata = lisa.predict(genelist)
+        results_df = pd.DataFrame(results.to_dict())
+
+        '''
         return dict( zip( self.results_headers, self._transpose_table(self.results_rows)))
 
     def update_column(self, name, data):
@@ -204,6 +201,28 @@ class LISA_Results:
         ]))
 
     def to_tsv(self, top_n = None):
+        '''
+    Reformats results object to tsv format and returns results as string. May be printed to a file for convenient storage.
+
+    Params
+    ------
+
+    top_n : int
+        Return top (n) results
+
+    Returns
+    -------
+
+    string
+        Results in tsv format
+
+    Example ::
+
+        results, metadata = lisa.predict(genelist)
+        with open('results.tsv', 'w') as f:
+            print(results.to_tsv(), file = f)
+
+        '''
         if not top_n is None:
             output_lines = self.subset(range(top_n))
         else:
