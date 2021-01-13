@@ -185,6 +185,7 @@ Example::
     $ lisa coverage -bw ./sample.bigwig -q ./genelist.txt --save_metadata > results.tsv
 
 ::
+
     usage: lisa coverage -q QUERY_GENES -bw BIGWIG_PATH
                                 [--rp_map_style {enhanced_10K,basic_10K}]
                                 [-o OUTPUT_PREFIX]
