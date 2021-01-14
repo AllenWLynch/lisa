@@ -1,14 +1,10 @@
 
 import pandas as pd
 from lisa.core.data_interface import DataInterface
-from lisa import FromCoverage, FromGenes
+from lisa import FromCoverage, FromGenes, FromRegions
+import os
 
 configfile: "config.yaml"
-
-if config['process_profiles']:
-    config['window_size'] = FromGenes.window_size
-else:
-    config['window_size'] = 100
 
 cistrome_metadata = pd.read_csv(config['cistrome_data'], sep = '\t').set_index('DCid')
 cistrome_metadata.index = cistrome_metadata.index.astype(str)
@@ -32,6 +28,7 @@ candidate_samples['passed_qc'] = (candidate_samples.UniquelyMappedRatio > 0.3) \
 DONE_PATH = "data/done/{species}/{window_size}/{technology}_{dataset_id}.done"
 FACTOR_PRECURSOR_PATH = "data/indices/{species}/{window_size}/{technology}_{dataset_id}.txt"
 PROFILE_PRECURSOR_PATH = "data/coverage_arrays/{species}/{window_size}/{technology}_{dataset_id}.npy"
+motif_metadata_path = "data/{species}/motif_metadata.tsv".format(species = config['species'])
 
 def get_unprocessed_ids(set1, set2):
     return list(
@@ -54,39 +51,45 @@ def get_dataset_touchfile(technology, dataset_id, is_profile = False):
     return DONE_PATH.format(**format_dict), precursor_path.format(**format_dict)
 
 #___ WHICH FACTOR HITS TO PROCESS ____
-factor_hit_samples = candidate_samples[
-    (candidate_samples.factor_type.isin(config['factor_hit_names'])) \
-    & (candidate_samples.summit.notna()) \
-    & (candidate_samples.passed_qc)    
-].index.values
+factor_targets, factor_precursors = [],[]
 
-processed_factor_hits = existing_data.list_binding_datasets('ChIP-seq')
+if config['process_factors']:
 
-unprocessed_factors = get_unprocessed_ids(factor_hit_samples, processed_factor_hits)
+    factor_hit_samples = candidate_samples[
+        (candidate_samples.factor_type.isin(config['factor_hit_names'])) \
+        & (candidate_samples.summit.notna()) \
+        & (candidate_samples.passed_qc)    
+    ].index.values
 
-if len(unprocessed_factors) > 0:
-    factor_targets, factor_precursors = list(zip(
-        *[get_dataset_touchfile('ChIP-seq', target) 
-        for target in unprocessed_factors]
-    ))
-else:
-    factor_targets, factor_precursors = [],[]
+    processed_factor_hits = existing_data.list_binding_datasets('ChIP-seq')
+
+    unprocessed_factors = get_unprocessed_ids(factor_hit_samples, processed_factor_hits)
+
+    if len(unprocessed_factors) > 0:
+        factor_targets, factor_precursors = list(zip(
+            *[get_dataset_touchfile('ChIP-seq', target) 
+            for target in unprocessed_factors]
+        ))
+    
 
 #___ WHICH MOTIFS TO PROCESS ____
+motif_targs, motif_precursors = [],[]
 
-candidate_motifs = pd.read_csv(config['motif_data'].format(species = config['species']), sep = '\t')
+if config['process_motifs']:
 
-processed_motifs = existing_data.list_binding_datasets('Motifs')
+    with open(config['motif_data'].format(species = config['species']), 'r') as f:
+        candidate_motifs = [x.strip() for x in f]
 
-unprocessed_motifs = get_unprocessed_ids(candidate_motifs.dataset_id.values, processed_motifs)
+    processed_motifs = existing_data.list_binding_datasets('Motifs')
 
-if len(unprocessed_motifs) > 0:
-    motif_targs, motif_precursors = list(zip(
-        *[get_dataset_touchfile('Motifs', target)
-        for target in unprocessed_motifs]
-    ))
-else:
-    motif_targs, motif_precursors = [],[]
+    unprocessed_motifs = get_unprocessed_ids(candidate_motifs, processed_motifs)
+
+    if len(unprocessed_motifs) > 0:
+        motif_targs, motif_precursors = list(zip(
+            *[get_dataset_touchfile('Motifs', target)
+            for target in unprocessed_motifs]
+        ))
+    
 
 #___ WHICH ACCESSIBILITY PROFILES TO PROCESS___
 
@@ -127,29 +130,20 @@ rule all:
 
 rule download_motifs:
     output:
-        temp("data/motif_beds_long/{species}/{dataset_id}.bed")
+        temp("data/motif_beds/{species}/{dataset_id}.bed.gz")
     shell:
-        'wget http://expdata.cmmt.ubc.ca/JASPAR/downloads/UCSC_tracks/2020/{wildcards.species}/{wildcards.dataset_id}.tsv.gz &&'
-        'gzip -d {wildcards.dataset_id}.tsv.gz &&'
-        'mv {wildcards.dataset_id}.tsv {output}'
-
-
-rule filter_motifs:
-    input:
-        "data/motif_beds_long/{species}/{dataset_id}.bed"
-    output:
-        "data/motif_beds/{species}/{dataset_id}.bed"
-    shell:
-        'awk \'$6>=450\' "{input}" > "{output}"'
+        'wget http://expdata.cmmt.ubc.ca/JASPAR/downloads/UCSC_tracks/2020/{wildcards.species}/{wildcards.dataset_id}.tsv.gz -O {output}'
 
 
 rule get_motif_hits:
     input:
-        "data/motif_beds/{species}/{dataset_id}.bed"
+        "data/motif_beds/{species}/{dataset_id}.bed.gz"
     output:
-        temp("data/indices/{species}/{window_size}/Motifs_{dataset_id}.txt")
+        indices=temp("data/indices/{species}/{window_size}/Motifs_{dataset_id}.txt")
+    params:
+        motif_metadata=motif_metadata_path
     shell:
-        'python ./bin/map_peaks_to_indices.py {wildcards.species} {wildcards.window_size} "{input}" "{output}"'
+        'python ./bin/calc_motif_bins.py {wildcards.species} {input} -w {wildcards.window_size} -o {output.indices} >> {params.motif_metadata}'
 
 
 rule get_chip_hits:
@@ -181,10 +175,11 @@ if config['process_profiles']:
         output:
             touch(TARGETS)
         params:
-            motifs=config['motif_data'].format(species = config['species'])
+            motifs=motif_metadata_path,
+            motifs_temp=motif_metadata + "_temp"
         shell:
-            'python ./bin/append_peak_indices.py {config[species]} {config[window_size]} {config[cistrome_data]} {params.motifs} {input.indices} &&'
-            ' python ./bin/append_profiles.py {config[species]} {config[window_size]} {config[cistrome_data]} {input.arrays}'
+            'python ./bin/append_peak_indices.py {config[species]} {config[window_size]} {config[cistrome_data]} {params.motifs} {input.indices} && '
+            'python ./bin/append_profiles.py {config[species]} {config[window_size]} {config[cistrome_data]} {input.arrays}'
 
 else:
 
@@ -194,6 +189,6 @@ else:
         output:
             touch(TARGETS)
         params:
-            motifs=config['motif_data'].format(species = config['species'])
+            motifs=motif_metadata_path
         shell:
             'python ./bin/append_peak_indices.py {config[species]} {config[window_size]} {config[cistrome_data]} {params.motifs} {input.indices}'

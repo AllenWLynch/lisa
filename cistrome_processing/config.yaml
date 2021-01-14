@@ -1,6 +1,11 @@
 
 species: hg38
-process_profiles: TRUE
+process_profiles: FALSE
+process_factors: TRUE
+process_motifs: TRUE
+
+window_size: 50
+
 start_new: TRUE
 
 factor_hit_names: 

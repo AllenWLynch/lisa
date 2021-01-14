@@ -9,7 +9,10 @@ def main(species, window_size, cistrome_metadata, motif_metadata, index_files):
 
     cistrome_metadata = pd.read_csv(cistrome_metadata, sep = '\t').set_index('DCid')
     cistrome_metadata.index = cistrome_metadata.index.astype(str)
-    motif_metadata = pd.read_csv(motif_metadata, sep = '\t').set_index('dataset_id')
+    motif_metadata = pd.read_csv(motif_metadata, sep = '\t', header = None)
+    motif_metadata.columns = ['dataset_id', 'factor', 'source']
+    motif_metadata = motif_metadata.set_index('dataset_id')
+    motif_metadata = motif_metadata.drop_duplicates()
 
     data = DataInterface(species, window_size= window_size, download_if_not_exists=False,
         make_new=False, load_genes=False)
