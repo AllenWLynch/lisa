@@ -397,4 +397,5 @@ def main():
         try:
             args.func(args)
         except (AssertionError, DownloadRequiredError, DatasetNotFoundError) as err:
-            print(err, file = sys.stderr)
+            print('ERROR: ' + str(err), file = sys.stderr)
+            sys.exit(1)
