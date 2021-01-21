@@ -101,7 +101,7 @@ class LISA_RP_Assay:
         most_significant_datasets = np.argsort(p_values)[:top_n]
         narrowed_reg_scores = delta_reg_scores[:, most_significant_datasets]
 
-        return narrowed_reg_scores[label_vector], narrowed_reg_scores[~label_vector],  most_significant_datasets
+        return narrowed_reg_scores[label_vector], narrowed_reg_scores[~label_vector].mean(axis = 0, keepdims = True),  most_significant_datasets
 
 
     def predict(self, gene_mask, label_vector, *args, data_object = None, debug = False, **kwargs):

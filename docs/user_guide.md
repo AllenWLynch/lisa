@@ -13,6 +13,8 @@ This notebook demonstrates the use of LISA's CLI and Python interfaces on real s
     + [CLI](#fromregions-cli)
     + [Data Analysis](#fromregions-data-analysis)
 
+This guide focuses on preparing data and executing different LISA tests. For a more in-depth guide into analyzing LISA's outputs, refer to the [Data Analysis Guide](DataAnalysisGuide.md).
+
 # Lisa FromGenes
 
 <img src="fromGenes.png" width=400>

@@ -10,7 +10,6 @@ a gene are influenced by deleting elements associated with a TF (a process we ca
 
 .. contents:: Interfaces
 
-
 lisa.FromGenes
 **************
 

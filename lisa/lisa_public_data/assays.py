@@ -27,7 +27,15 @@ class PeakRP_Assay(LISA_RP_Assay):
         #calculate p-values by directly applying mannu-test on RP matrix. Subset the RP matrix for genes-of-interest if required
         p_vals = self.get_delta_RP_p_value(rp_matrix, label_vector)
 
-        return p_vals, dict()
+        query_reg_score_matrix, background_reg_score_matrix, top_factor_idx = self.get_delta_reg_score_matrix(p_vals, rp_matrix, label_vector)
+
+        return p_vals, dict(
+            reg_scores = dict(
+                dataset_ids = list(np.array(self.factor_dataset_ids)[top_factor_idx]),
+                query_reg_scores = query_reg_score_matrix.tolist(),
+                background_reg_scores = background_reg_score_matrix.tolist()
+            ),
+        )
 
 #Generator that repeatedly yields the same factor_binding and rp_map matrices with a new accessibility profile 
 #to the multiprocessing pool creator. This reduces data redundancy.
@@ -165,20 +173,15 @@ class Accesibility_Assay(LISA_RP_Assay):
             #self.log.append('Introspecting accessibility around factors ...')
             #factor_acc_z_scores = self.introsect_accessibility(self.rp_matrix, self.factor_gene_mask, dataset_mask,
             #    self.chromatin_model.model.coef_)
+            query_reg_score_matrix, background_reg_score_matrix, top_factor_idx = self.get_delta_reg_score_matrix(p_vals, delta_reg_scores, label_vector)
 
             self.log.append('Done!')
 
-        if debug:
-            return p_vals, dict(
-                gene_mask = gene_mask,
-                label_vector = label_vector,
-                subset_rp_matrix = subset_rp_matrix,
-                subset_rp_map = subset_rp_map,
-                subset_factor_binding = subset_factor_binding,
-                delta_reg_scores = delta_reg_scores,
-                dataset_mask = dataset_mask,
-                bin_mask = bin_mask,
-            )
-        else:
-            return p_vals, dict(chromatin_model = self.chromatin_model.get_info(), selection_model = self.selection_model.get_info(),
-            selected_dataset_meta = self.data_interface.transpose_metadata(metadata, self.technology))#, factor_acc_z_scores = factor_acc_z_scores)
+        return p_vals, dict(chromatin_model = self.chromatin_model.get_info(), selection_model = self.selection_model.get_info(),
+            selected_dataset_meta = self.data_interface.transpose_metadata(metadata, self.technology), #factor_acc_z_scores = factor_acc_z_scores,
+            reg_scores = dict(
+                dataset_ids = list(np.array(self.factor_dataset_ids)[top_factor_idx]),
+                query_reg_scores = query_reg_score_matrix.tolist(),
+                background_reg_scores = background_reg_score_matrix.tolist()
+            ),
+        )

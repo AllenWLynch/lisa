@@ -2,6 +2,8 @@
 LISA: Landscape In-Silico deletion Analysis
 *******************************************
 
+![Gene-TF Map](docs/example_clustermap.png)
+
 .. contents:: Table of Contents
 
 About
@@ -10,6 +12,9 @@ About
 LISA is a statistical test for the influence of Transcription Factors on a set of genes. We leverage integrative modeling of public chromatin accessiblity and factor binding to make predictions that go beyond simple co-expression analysis. 
 The minimum you need to run LISA is a list of genes-of-interest, but you can also supply your own epigenetic background. For more information, see `Qin et al., 2020 <https://genomebiology.biomedcentral.com/articles/10.1186/s13059-020-1934-6>`_. 
 This implementation extends the original, running faster, reducing dependencies, and adding useful CLI functions for pipeline integration.
+
+The python package is easy to install and has a rich set of features and options. 
+For a quick introduction to the method, check out the `web interface <http://lisa.cistrome.org/>`_.
 
 The Model
 -----
@@ -26,7 +31,8 @@ When you provide genes-of-interest, LISA finds factors that preferentially affec
 .. image:: docs/model_diagram.png
   :width: 300
 
-See the `User Guide <docs/user_guide.md>`_ to see it in action. 
+Refer to the `User Guide <docs/user_guide.md>`_ to see it in action. 
+Refer to the `Data Analysis Guide <docs/DataAnalysisGuide.md>`_ to see the questions LISA can help you answer.
 
 Requirements
 ------------
