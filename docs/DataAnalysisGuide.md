@@ -1,8 +1,8 @@
 # LISA Data Analysis Tutorial
 
-- [Which Factors Influence my Genes?](#Which-Factors-Influence-my-Genes)
-- [Which Genes do my Factors Target?](#Which-Genes-do-my-Factors-Target?)
-- [How was the Geneset Modeled?](#How-was-the-Geneset-Modeled?)
+- [Which Factors Influence my Genes](#Which-Factors-Influence-my-Genes)
+- [Which Genes do my Factors Target](#Which-Genes-do-my-Factors-Target)
+- [How was the Geneset Modeled](#How-was-the-Geneset-Modeled)
 
 
 In this tutorial, we analyze LISA results from the Web API/FromGenes test and explore how LISA arrived at its factor predictions. Our genes-of-interest are the down-regulated genes from a SOX2 knockout experiment, which you can download from the Hg38 gallery (GEO id: GSE59234). 
@@ -351,7 +351,7 @@ print('\t'.join(results[:100].drop_duplicates(subset = 'factor').factor.values))
 
 Now we can see there are a variety of factors that may influence our genes. Additionally, we can see that most of the ChIP-seq experiments that ranked highly were conducted in stem cells, indicating our genes and modeled regulatory state are related to cell fate and development, as are many of these factors.
 
-## Which Genes do my Factors Target?
+## Which Genes do my Factors Target
 
 To answer this question, we must dig into the LISA metadata. For each epigenetic background model that LISA tests (in this case "Direct" factor binding, DNase, and H3K27ac) there is a json subdictionary. The query genes you provided and the background genes sampled by LISA are also saved:
 
@@ -586,7 +586,7 @@ net.widget()
 
 To use euclidean distance with ward linkage.
 
-## How was the Geneset Modeled?
+## How was the Geneset Modeled
 
 Lastly, we can explore the test metadata to see how LISA arrived at its predictions. 
 The key components of the LISA test are the:
