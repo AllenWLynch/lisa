@@ -4,8 +4,7 @@ LISA: Landscape In-Silico deletion Analysis
 
 .. image:: docs/example_clustermap.png
   :width: 200
-  :: Transcription Factor-Gene Targeting Map. One output of all LISA tests.
-
+  
 .. contents:: Table of Contents
 
 About
