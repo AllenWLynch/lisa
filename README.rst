@@ -2,7 +2,8 @@
 LISA: Landscape In-Silico deletion Analysis
 *******************************************
 
-![Gene-TF Map](docs/example_clustermap.png)
+.. image:: docs/example_clustermap.png
+  :width: 300
 
 .. contents:: Table of Contents
 

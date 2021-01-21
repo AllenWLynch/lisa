@@ -11,7 +11,7 @@ To run this test yourself, simply paste the genes into the ``Gene Set 1`` box an
 
 I gave my job the name ``Tutorial`` and hit ``Run``. 
 
-![LISA Web API](./lisa-web-ui.png)
+![LISA Web API](./lisa_web_ui.png)
 
 After LISA has made its predictions, hit the ``Download Results`` tab and unpack your genes into a folder called "data", now we can begin our analysis. Alternatively, you can save your genelist to a file called ``SOX2_Down.txt``, and use the LISA command-line package:
 
@@ -53,19 +53,6 @@ results.head(20)
 
 
 <div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
 <table border="1" class="dataframe">
   <thead>
     <tr style="text-align: right;">
@@ -360,19 +347,6 @@ results[:100].drop_duplicates(subset = 'factor')
 
 
 <div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
 <table border="1" class="dataframe">
   <thead>
     <tr style="text-align: right;">
@@ -1038,19 +1012,6 @@ regscores_matrix.iloc[:5,:5]
 
 
 <div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
 <table border="1" class="dataframe">
   <thead>
     <tr style="text-align: right;">
@@ -1255,19 +1216,6 @@ selected_samples
 
 
 <div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
 <table border="1" class="dataframe">
   <thead>
     <tr style="text-align: right;">
