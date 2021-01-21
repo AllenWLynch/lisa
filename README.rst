@@ -3,7 +3,7 @@ LISA: Landscape In-Silico deletion Analysis
 *******************************************
 
 .. image:: docs/example_clustermap.png
-  :width: 125
+  :width: 125px
   
 .. contents:: Table of Contents
 
