@@ -561,10 +561,10 @@ print('Set 1:\n ' + '\t'.join(blue_cluster_genes), 'Set 2:\n '+'\t'.join(green_c
      CD53	HORMAD1	PIK3AP1	ASRGL1	C1R	SLCO1C1	METTL7A	HSD17B6	TRHDE	RYR3	MT1M	SERPINF1	SOX15	REEP6	TUBB4A	CLC	ATP6V1C2	TFCP2L1	DEFB128	SLC23A2	CTDSPL	HESX1	TBC1D23	GPR160	SHISA3	EDIL3	SPOCK1	STC2	SLC16A10	CDCA7L	HUS1	CCL26	ERVW-1	PRKAR2B	PLEKHA2	SHC3	TLR4	GPM6B	CNKSR2	IQSEC2	IL13RA2
 
 
-Running these genesets on [Enricher](https://maayanlab.cloud/Enrichr/), and we can see that ``blue-cluster genes`` are enriched for targets of pluripotent stem cell developmental pathways, ``green-cluster genes`` are enriched for cAMP signalling genes, while the ``red-cluster genes`` show enrichment for phagosomal activity. 
+Running these genesets on [Enricher](https://maayanlab.cloud/Enrichr/), we can see that ``blue-cluster genes`` are enriched for targets of pluripotent stem cell developmental pathways, ``green-cluster genes`` are enriched for cAMP signalling genes, while the ``red-cluster genes`` show enrichment for phagosomal activity. 
 
 In summary, the query set began with all genes shown to be differentially expressed after SOX2 knockout. Using LISA we were able to 
-1. discover which factors may be influencing the changes in expression (surprisingly, SOX2 ranked highly)
+1. discover which factors may be influencing the changes in expression (unsurprisingly, SOX2 ranked highly)
 2. find which genes those factors were targeting. 
 3. Identify genes that do not appear to be directly-targeted by our influential factors, but are still differentially-expressed in our system.
 
