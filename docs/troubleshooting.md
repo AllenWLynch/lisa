@@ -6,7 +6,7 @@ First, on the server, use the command below to issue the download URL for the re
 
 *server*
 ```bash
-$ lisa download hg38 oneshot
+$ lisa download hg38 oneshot --url
 http://cistrome.org/~alynch/data/lisa_data/hg38_1000_2.0.h5
 ```
 
