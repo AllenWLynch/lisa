@@ -8,6 +8,7 @@ Installing LISA using pip or conda adds the "lisa" command to your path. LISA's 
 * `lisa oneshot`_ : one genelist
 * `lisa multi`_ : multiple genelists
 * `lisa regions`_ : one genelist and a list of regions
+* `lisa coverage`_ : one genelist and bigwig file of coverage over genome
 
 Which are used depending on the evidence you have on hand. 
 
