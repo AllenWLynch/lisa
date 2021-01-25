@@ -263,7 +263,7 @@ Parse regions and region scores from bed-like file. Must have columns *chrom, st
 
 Params:
     path (str):
-        path to MACS2 .xls output file
+        path to bed file
     header (bool):
         If true, skip first line of bedfile
     
