@@ -393,17 +393,15 @@ regscores_matrix = pd.DataFrame( #the reg_scores of our query genes
     np.array(metadata["DNase"]['reg_scores']['query_reg_scores']) \
              - np.array(metadata['DNase']['reg_scores']['background_reg_scores']), #subtract the average reg_scores of our background genes
     index = metadata['query_symbols'],  #label the index with our query gene names
-    columns = results['factor'].values[:100] #label the columns with our top 100 factor names (duplicates included)
+    columns = results.sort_values('DNase_p_value')['factor'].values[:100] #label the columns with our top 100 factor names (duplicates included)
 )
 ```
 
+*Since we are using the DNase reg scores above, we must sort the results by "DNase_p_value" before taking the top 100 factors!*
 
 ```python
 regscores_matrix.iloc[:5,:5]
 ```
-
-
-
 
 <div>
 <table border="1" class="dataframe">
@@ -516,16 +514,8 @@ sns.clustermap(regscores_matrix, # our data
               )
 ```
 
-
-
-
-    <seaborn.matrix.ClusterGrid at 0x7fa4eff50490>
-
-
-
-
     
-![png](output_24_1.png)
+![png](example_clustermap.png)
     
 
 
@@ -533,7 +523,7 @@ From the heatmap above, we can see there appears to be 4 major clusters of genes
 
 * The red gene cluster shows little response from our factors, but the blue and orange clusters appear highly influencd by our first branch of TFs, including SOX2, NANOG, and POU5F1. This branch of factors also shows the most significant p-values.
 * Meanwhile, our second TF cluster, which features SMAD3 and NIPBL appears specific for only blue-cluster genes. 
-* Lasly, The third cluster of factors, including MBD2, SMAD2 and MED1, shows influence specific to green-cluster genes. 
+* Lasly, The third cluster of factors, including JUND, HDAC2, and ERG, shows influence specific to green-cluster genes. 
 
 Let's see if these gene subsets are enriched for any biological activity.
 

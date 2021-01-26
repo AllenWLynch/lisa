@@ -321,7 +321,7 @@ class LISA_Core:
             return self._format_results(assay_pvals, assay_info, gene_info_dict, summary_p_value = summary_p_value)
 
         except (DatasetNotFoundError):
-            raise DownloadRequiredError('Data is malformed or incomplete, run "lisa download [species]" to redownload dataset')
+            raise DownloadRequiredError('Data is malformed or incomplete, run "lisa download [species] [test]" to redownload dataset')
 
     def get_docs(self):
         return '\n'.join([
