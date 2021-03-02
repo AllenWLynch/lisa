@@ -111,6 +111,7 @@ class RefSeqGene(Gene):
             for exon_start, exon_end in zip(exonStarts.strip(',').split(','), exonEnds.strip(',').split(',')):
                 self.add_region(Region(chrom, exon_start, exon_end))
 
+        self.strand = strand
         self.is_noncoding = name[:3] == "NR_"
 
     def get_exon_regions(self):

@@ -19,7 +19,7 @@ See the `Python API <python_api.rst>`_ for more in-depth description of tests an
 from lisa import FromRegions, FromGenes, FromCoverage
 from lisa.core.utils import Log
 from lisa.core.lisa_core import DownloadRequiredError
-from lisa.core.data_interface import DatasetNotFoundError
+from lisa.core.data_interface import DatasetNotFoundError, INSTALL_PATH
 from lisa._version import __version__
 import configparser
 import argparse
@@ -34,6 +34,7 @@ import numpy as np
 
 from lisa.lisa_public_data.genes_test import _config as public_config
 from lisa.lisa_user_data.regions_test import _config as user_config
+from lisa.core.io import parse_deseq_file
 
 #____COMMAND LINE INTERFACE________
 
@@ -134,6 +135,9 @@ def print_results_multi(results_summary):
     for result_line in results_summary:
         print(result_line[0], ', '.join(result_line[1]), sep = '\t')
 
+class MultiError(Exception):
+    pass
+
 def lisa_multi(args):
 
     log = Log(target = sys.stderr, verbose = args.verbose)
@@ -142,6 +146,7 @@ def lisa_multi(args):
     query_dict = {os.path.basename(query.name) : query.readlines() for query in args.query_lists}
 
     results_summary = []
+    all_passed = True
     for query_name, query_list in query_dict.items():
     
         with log.section('Modeling {}:'.format(str(query_name))):
@@ -153,11 +158,49 @@ def lisa_multi(args):
                 results_summary.append((query_name, top_TFs_unique))
             
             except AssertionError as err:
+                all_passed = False
                 log.append('ERROR: ' + str(err))
 
     print_results_multi(results_summary)
 
-    #make_summary_table(args.prefix + '.combined.' + original_isd_names[args.isd_method] + '.csv'
+    if not all_passed:
+        raise MultiError('One or more genelists raised an error')
+
+def lisa_deseq(args):
+
+    log = Log(target = sys.stderr, verbose = args.verbose)
+    lisa = FromGenes(args.species, **extract_kwargs(args, INSTANTIATION_KWARGS), log = log)
+
+    up_genes, down_genes = parse_deseq_file(args.deseq_file, lfc_cutoff = args.lfc_cutoff, 
+        pval_cutoff= args.pval_cutoff, sep = args.sep)
+
+    results_summary = []
+    all_passed = True
+    for prefix, query_list in zip(['up-regulated', 'down-regulated'], [up_genes, down_genes]):
+    
+        with log.section('Modeling {}:'.format(str(prefix))):
+            try: 
+                results, metadata = lisa.predict(query_list, **extract_kwargs(args, PREDICTION_KWARGS))
+
+                top_TFs_unique = save_and_get_top_TFs(args, prefix, results, metadata)
+            
+                results_summary.append((prefix, top_TFs_unique))
+            
+            except AssertionError as err:
+                all_passed = False
+                log.append('ERROR: ' + str(err))
+
+    print_results_multi(results_summary)
+
+    if not all_passed:
+        raise MultiError('One or more genelists raised an error')
+
+def confirm_file(arg):
+    if os.path.isfile(arg):
+        return arg
+    else:
+        raise argparse.ArgumentTypeError('ERROR: {} is not a valid file'.format(str(arg)))
+
 def run_tests(args):
 
     if not args.skip_oneshot:
@@ -179,7 +222,6 @@ def build_from_genes_args(parser, add_assays = True):
         default= public_config.get('lisa_params','rp_map_styles').split(',')[0], help = 'Which style of rp_map to assess influence of regions on genes. "basic" is stricly distance-based, while "enhanced" masks the exon and promoter regions of nearby genes.')
 
 def build_multiple_lists_args(parser):
-    parser.add_argument('query_lists', type = argparse.FileType('r', encoding = 'utf-8'), nargs = "+", help = 'user-supplied gene lists. One gene per line in either symbol or refseqID format')
     parser.add_argument('-o','--output_prefix', required = True, type = is_valid_prefix, help = 'Output file prefix.')
     parser.add_argument('-v','--verbose',type = int, default = 2)
     parser.add_argument('-b','--num_background_genes', type = int, default = public_config.get('lisa_params', 'background_genes'),
@@ -200,11 +242,12 @@ def build_one_list_args(parser, default_background_strategy = 'regulatory'):
         help = 'Number of sampled background genes to compare to user-supplied genes')
     parser.add_argument('-v','--verbose',type = int, default = 4)
 
-def confirm_file(arg):
-    if os.path.isfile(arg):
-        return arg
-    else:
-        raise argparse.ArgumentTypeError('ERROR: {} is not a valid file'.format(str(arg)))
+def build_deseq_args(parser):
+    parser.add_argument('deseq_file', type = confirm_file, help = 'DEseq differential expression output file. Will be parsed for differentially up and down-regulated genes.')
+    parser.add_argument('-lfc','--lfc_cutoff', type = float, default = 2, help = 'Log2 fold-change cutoff. For up-regulated genes, must have LFC > cutoff. For down-regulated genes, less than -1 * cutoff. Default of 1 means genes must be up or down-regulated by a factor of 2 to be included in query.')
+    parser.add_argument('-p','--pval_cutoff', type = float, default = 0.1, help = 'Adjusted p-value cutoff. Gene must have pval below cutoff to be a query gene.')
+    parser.add_argument('--sep', type = str, default='\t', help = 'Field separator for DESeq output file.')
+   
 
 class RstFormatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawTextHelpFormatter):
     pass
@@ -244,6 +287,28 @@ build_from_genes_args(oneshot_parser)
 build_common_args(oneshot_parser)
 oneshot_parser.set_defaults(func = lisa_oneshot)
 
+deseq_parser = subparsers.add_parser('deseq', formatter_class = RstFormatter, description = '''
+lisa deseq
+----------
+
+You have:
+
+* RNA-seq differential expression results from DESeq2
+
+Use LISA to infer influential TFs given differentially expressed genes found using DESeq2. Will seperate up-regulated and down-regulated genes into their own LISA tests.
+
+Example::
+
+    $ lisa deseq hg38 ./deseq_results.tsv -o deseq/ -b 501 --seed=2556 --save_metadata
+
+''')
+deseq_parser.add_argument('species', choices = ['hg38','mm10'], help = 'Find TFs associated with human (hg38) or mouse (mm10) genes')
+build_deseq_args(deseq_parser)
+build_multiple_lists_args(deseq_parser)
+build_from_genes_args(deseq_parser)
+build_common_args(deseq_parser)
+deseq_parser.set_defaults(func = lisa_deseq, background_list = None)
+
 #__ LISA multi command __
 multi_parser = subparsers.add_parser('multi', formatter_class=RstFormatter, description = '''
 lisa multi
@@ -262,6 +327,7 @@ Example::
 
 ''')
 multi_parser.add_argument('species', choices = ['hg38','mm10'], help = 'Find TFs associated with human (hg38) or mouse (mm10) genes')
+multi_parser.add_argument('query_lists', type = argparse.FileType('r', encoding = 'utf-8'), nargs = "+", help = 'user-supplied gene lists. One gene per line in either symbol or refseqID format')
 build_multiple_lists_args(multi_parser)
 build_from_genes_args(multi_parser)
 build_common_args(multi_parser)
@@ -363,16 +429,27 @@ def install_data(args):
         _class = FromRegions
     else:
         raise AssertionError('Command {} not recognized'.format(args.command))
+    
+    dataset_file_required = os.path.basename(_class.get_dataset_path(args.species))
+
+    if not args.force:
+        assert(dataset_file_required == os.path.basename(args.dataset)), 'The {} test requires dataset {}. Use --force to overide and install your own dataset.'.format(args.command, dataset_file_required)
+
+    if not os.path.isdir(INSTALL_PATH):
+        os.mkdir(INSTALL_PATH)
+    
     if args.remove:
         os.rename(args.dataset, _class.get_dataset_path(args.species))
     else:
         copyfile(args.dataset, _class.get_dataset_path(args.species))
+
 
 install_data_parser = subparsers.add_parser('install', description = 'Helper command for manually installing Lisa\'s data')
 install_data_parser.add_argument('species', choices = ['hg38','mm10'], help = 'Install data associated with human (hg38) or mouse (mm10) genes')   
 install_data_parser.add_argument('command', choices=['oneshot', 'multi', 'regions', 'coverage'], help = 'For which command to install data')
 install_data_parser.add_argument('dataset', type = confirm_file, help = 'Path to downloaded h5 dataset')
 install_data_parser.add_argument('--remove', action = 'store_true', help = 'Delete dataset after installation is complete.')
+install_data_parser.add_argument('--force', action = 'store_true', help = 'Skip namecheck and install lisa custom dataset')
 install_data_parser.set_defaults(func = install_data)
 
 #____ LISA run tests command ___
@@ -396,6 +473,6 @@ def main():
     else:
         try:
             args.func(args)
-        except (AssertionError, DownloadRequiredError, DatasetNotFoundError) as err:
+        except (AssertionError, DownloadRequiredError, DatasetNotFoundError, MultiError) as err:
             print('ERROR: ' + str(err), file = sys.stderr)
             sys.exit(1)

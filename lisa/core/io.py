@@ -1,4 +1,34 @@
 
+from numpy import inf
+
+def parse_deseq_file(path, lfc_cutoff = 1.5, pval_cutoff = 0.05, sep = '\t'):
+
+    up_genes, down_genes = [],[]
+
+    with open(path, 'r') as f:
+        
+        skipped_header = False
+        for i, line in enumerate(f):
+
+            if i > 0 and not (line == '' or line == '\n'):
+                fields = line.strip().split('\t')
+                assert(len(fields) == 7), 'Correctly formatted DESeq2 file must have 7 fields.'
+
+                try:
+                    gene_name, lfc, pval = fields[0], float(fields[2]), float(fields[6])
+
+                    if pval <= pval_cutoff and abs(lfc) >= lfc_cutoff:
+                        if lfc > 0:
+                            up_genes.append(gene_name)
+                        elif lfc < 0:
+                            down_genes.append(gene_name)
+
+                except ValueError:
+                    pass
+
+    return up_genes, down_genes
+
+
 def parse_macs_file(path):
     '''
 **lisa.parse_macs_file** (path)

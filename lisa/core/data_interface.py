@@ -130,7 +130,7 @@ class DataInterface:
     @staticmethod
     def _make_basic_rp_map(gene_loc_set, region_set, decay):
 
-        distance_matrix = gene_loc_set.map_intersects(region_set, lambda x,y : x.get_genomic_distance(y), slop_distance=50000)
+        distance_matrix = gene_loc_set.map_intersects(region_set, lambda x,y : x.get_genomic_distance(y), slop_distance= 5 * decay)
 
         distance_matrix.data = np.power(2, -distance_matrix.data/decay)
 
