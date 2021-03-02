@@ -261,10 +261,11 @@ Example::
     optional arguments:
       -h, --help            show this help message and exit
       -lfc LFC_CUTOFF, --lfc_cutoff LFC_CUTOFF
-                            Log2 fold-change cutoff. For up-regulated genes, must have LFC > cutoff. For down-regulated genes, less than -1 * cutoff. Default of 1 means genes must be up or down-regulated by a factor of 2 to be included in query. (default: 2)
+                            Log2 fold-change cutoff. For up-regulated genes, must have LFC > cutoff. For down-regulated genes, less than -1 * cutoff. 
+                            Default of 1 means genes must be up or down-regulated by a factor of 2 to be included in query. (default: 1)
       -p PVAL_CUTOFF, --pval_cutoff PVAL_CUTOFF
                             Adjusted p-value cutoff. Gene must have pval below cutoff to be a query gene. (default: 0.1)
-      --sep SEP             Field separator for DESeq output file. (default: 	)
+      --sep SEP             Field separator for DESeq output file. (default: tab)
       -v VERBOSE, --verbose VERBOSE
       -b NUM_BACKGROUND_GENES, --num_background_genes NUM_BACKGROUND_GENES
                             Number of sampled background genes to compare to user-supplied genes. These genes are selection from other gene lists. (default: 3000)

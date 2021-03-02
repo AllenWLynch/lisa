@@ -244,7 +244,7 @@ def build_one_list_args(parser, default_background_strategy = 'regulatory'):
 
 def build_deseq_args(parser):
     parser.add_argument('deseq_file', type = confirm_file, help = 'DEseq differential expression output file. Will be parsed for differentially up and down-regulated genes.')
-    parser.add_argument('-lfc','--lfc_cutoff', type = float, default = 2, help = 'Log2 fold-change cutoff. For up-regulated genes, must have LFC > cutoff. For down-regulated genes, less than -1 * cutoff. Default of 1 means genes must be up or down-regulated by a factor of 2 to be included in query.')
+    parser.add_argument('-lfc','--lfc_cutoff', type = float, default = 1, help = 'Log2 fold-change cutoff. For up-regulated genes, must have LFC > cutoff. For down-regulated genes, less than -1 * cutoff. Default of 1 means genes must be up or down-regulated by a factor of 2 to be included in query.')
     parser.add_argument('-p','--pval_cutoff', type = float, default = 0.1, help = 'Adjusted p-value cutoff. Gene must have pval below cutoff to be a query gene.')
     parser.add_argument('--sep', type = str, default='\t', help = 'Field separator for DESeq output file.')
    

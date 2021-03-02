@@ -4,9 +4,8 @@ from setuptools import setup, find_packages
 
 setup(
     name = 'lisa2',
-    description = """Lisa: inferring transcriptional regulators through integrative modeling of public chromatin accessibility and ChIP-seq data\n
-X. Shirley Liu Lab, 2020""",
-    version = '2.2.3',
+    description = "Lisa: inferring transcriptional regulators through integrative modeling of public chromatin accessibility and ChIP-seq data. X. Shirley Liu Lab, 2020",
+    version = '2.2.4',
     url = 'https://genomebiology.biomedcentral.com/articles/10.1186/s13059-020-1934-6',
     author = 'Allen Lynch',
     author_email = 'alynch@ds.dfci.harvard.edu',
@@ -27,6 +26,7 @@ X. Shirley Liu Lab, 2020""",
     ],
     include_package_data=True,
     python_requires='>=3.6,<4',
+    long_description_content_type='text/markdown',
     long_description = '''
 # About
 
@@ -82,5 +82,4 @@ Then install from Conda:
 * scikit-learn
 
     ''',
-    long_description_content_type='text/markdown',
 )
