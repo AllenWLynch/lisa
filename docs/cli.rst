@@ -242,7 +242,7 @@ Example::
 
 ::
 
-    usage: run-test.py deseq [-h] [-lfc LFC_CUTOFF] [-p PVAL_CUTOFF] [--sep SEP]
+    usage: lisa deseq [-h] [-lfc LFC_CUTOFF] [-p PVAL_CUTOFF] [--sep SEP]
                 -o OUTPUT_PREFIX [-v VERBOSE]
                 [-b NUM_BACKGROUND_GENES] [--random_background]
                 [-a {Direct,H3K27ac,DNase} [{Direct,H3K27ac,DNase} ...]]
