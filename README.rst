@@ -106,6 +106,10 @@ The python module allows more control over the LISA test and more convenient dat
 Changelog
 ---------
 
+**[2.2.4] - 2021-03-01**
+
+* Added "lisa deseq" interface for parsing DESeq2 output files for fast LISA tests of DE genes
+
 **[2.2.0] - 2021-01-10**
 
 Added
