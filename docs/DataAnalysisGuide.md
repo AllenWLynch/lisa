@@ -492,7 +492,7 @@ Next, I mapped the p-values of the factors to colors.
 
 
 ```python
-pvals = -np.log10(results['summary_p_value'].values[:100])
+pvals = -np.log10(results.sort_values('DNase_p_value')['DNase_p_value'].values[:100])
 pval_colors = sns.color_palette("magma", as_cmap=True )(
         matplotlib.colors.Normalize(vmin=0, vmax=pvals.max() )(pvals)
     )
