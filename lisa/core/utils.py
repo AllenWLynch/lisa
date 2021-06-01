@@ -14,13 +14,13 @@ def ragged_array_to_sparse_matrix(indices, values, col_length):
         for index_column, val_column in zip(indices, values)
     ])
 
-def indices_list_to_sparse_array(indices_list, num_bins):
+def indices_list_to_sparse_array(indices_list, num_bins, data = None):
     return sparse.vstack([
         sparse.csr_matrix(
-            (np.ones_like(ind), ind, [0, len(ind)]),
+            (np.ones_like(ind) if data is None else data[rownum], ind, [0, len(ind)]),
             shape = (1, num_bins)
         )
-        for ind in indices_list
+        for rownum, ind in enumerate(indices_list)
     ])
 
 class LoadingBar:

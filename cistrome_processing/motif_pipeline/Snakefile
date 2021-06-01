@@ -1,0 +1,59 @@
+
+configfile: "config.yaml"
+
+with open(config['motifs'], 'r') as f:
+    motifs_to_add = [x.strip().upper() for x in f]
+
+motif_metadata_path = "data/motif_beds/{species}/motif_metadata.tsv".format(species = config['species'])
+
+rule all:
+    input:
+        "Motif_{species}_{window_size}.done".format(species = config['species'], window_size = config['window_size'])
+
+
+rule download_motifs:
+    output:
+        temp("data/motif_beds/{species}/{dataset_id}.bed.gz")
+    shell:
+        'wget http://expdata.cmmt.ubc.ca/JASPAR/downloads/UCSC_tracks/2020/{wildcards.species}/{wildcards.dataset_id}.tsv.gz -O {output}'
+
+
+rule get_motif_hits:
+    input:
+        "data/motif_beds/{species}/{dataset_id}.bed.gz"
+    output:
+        indices=temp("data/indices/{species}/{window_size}/Motifs_{dataset_id}.txt")
+    params:
+        motif_metadata=motif_metadata_path
+    shell:
+        'touch {params.motif_metadata} && python ./bin/get_motif_bins.py {wildcards.species} {input} -w {wildcards.window_size} -o {output.indices} --id {wildcards.dataset_id} >> {params.motif_metadata}'
+
+
+rule aggregate_motif_hits:
+        input:
+            indices=lambda wildcards : expand("data/indices/{species}/{window_size}/Motifs_{dataset_id}.txt", 
+                species=wildcards.species, window_size = wildcards.window_size,  dataset_id = motifs_to_add)
+        output:
+            temp("data/indices/{species}/{window_size}/Motif_aggregated_hits.bed")
+        shell:
+            'cat {input.indices} > {output}'
+
+
+rule sort_aggregated_hits:
+    input:
+        "data/indices/{species}/{window_size}/Motif_aggregated_hits.bed"
+    output:
+        "data/indices/{species}/{window_size}/Motif_aggregated_hits.sorted.bed"
+    shell:
+        "sort -k2,2n {input} > {output}"
+
+
+rule format_h5:
+    input:
+        "data/indices/{species}/{window_size}/Motif_aggregated_hits.sorted.bed"
+    output:
+        touch("Motif_{species}_{window_size}.done")
+    params:
+        motifs=motif_metadata_path
+    shell:
+        'python ./bin/add_motifs_to_h5.py {config[species]} {config[window_size]} {params.motifs} {input}'

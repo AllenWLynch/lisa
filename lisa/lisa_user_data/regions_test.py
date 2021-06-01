@@ -166,8 +166,7 @@ For more, see `User Guide <user_guide.md>`_.
 
         assert(isinstance(regions, (list, tuple))), '"regions" parameter must be list of region tuples in format [ (chr,start,end [,score]), (chr,start,end [,score]) ... ] or name of bed file.'
         
-        self.log.append('Validation user-provided regions ...')
-
+        self.log.append('Validating user-provided regions ...')
         self.num_regions_supplied = len(regions)
 
         regions = self._check_region_specification(regions)

@@ -278,6 +278,9 @@ class DataInterface:
     def get_factor_hit_path(self, technology, dataset_id):
         return self._config.get('factor_binding','hits').format(technology = technology, dataset_id = dataset_id)
 
+    def get_factor_score_path(self, technology, dataset_id):
+        return self._config.get('factor_binding','scores').format(technology = technology, dataset_id = dataset_id)
+
     def get_metadata(self, attributes, technology, dataset_id):
         return {dataset_id : {key : attributes[key] for key in self.get_metadata_headers(technology)}}
 
@@ -288,15 +291,21 @@ class DataInterface:
 
         return {'sample_id' : sample_ids, **{key : [metadata[sample][key] for sample in sample_ids] for key in headers}}
 
-    def add_binding_data(self, technology, dataset_id, hit_bins, **metadata):
+    def add_binding_data(self, technology, dataset_id, hit_bins, hit_scores = None, **metadata):
 
         hits_path = self.get_factor_hit_path(technology, dataset_id)
+        scores_path = self.get_factor_score_path(technology, dataset_id)
 
         with h5.File(self.path, 'a') as data:
             if hits_path in data:
                 del data[hits_path]
 
             hits = data.create_dataset(hits_path, data = np.array(hit_bins), dtype = np.int32, compression=COMPRESSION)
+            
+            if not hit_scores is None:
+                assert(len(hit_bins) == len(hit_scores))
+                scores = data.create_dataset(scores_path, data = np.array(hit_scores), dtype = np.float64, compression=COMPRESSION)
+
             self.set_attributes(hits, metadata)
 
     def get_binding_dataset(self, technology, dataset_id):
@@ -306,17 +315,24 @@ class DataInterface:
         with h5.File(self.path, 'r') as data:
             
             factor_dataset_path = self.get_factor_hit_path(technology, dataset_id)
-            
+            scores_path = self.get_factor_score_path(technology, dataset_id)
+
             try:
                 hit_bins = np.array(data[factor_dataset_path][...])
 
                 attributes = data[factor_dataset_path].attrs
+
+                if scores_path in data:
+                    scores = np.array(data[scores_path][...])
+                else:
+                    scores = np.ones_like(hit_bins)
+
             except KeyError:
                 raise DatasetNotFoundError(factor_dataset_path)
 
             metadata = self.get_metadata(attributes, technology, dataset_id)
         
-        return hit_bins, metadata
+        return hit_bins, scores, metadata
 
     def get_binding_data(self, technology):
         
@@ -325,14 +341,16 @@ class DataInterface:
             dataset_ids = list(data[self._config.get('factor_binding','root').format(technology=technology)].keys())
 
             indices = []
+            scores = []
             metadata = dict()
             for dataset_id in dataset_ids:
-                hit_bins, sample_meta = self.get_binding_dataset(technology, dataset_id)
+                hit_bins, hit_scores, sample_meta = self.get_binding_dataset(technology, dataset_id)
 
                 metadata.update(sample_meta)
                 indices.append(hit_bins)
+                scores.append(hit_scores)
 
-        hits_matrix = indices_list_to_sparse_array(indices, len(self.genome))
+        hits_matrix = indices_list_to_sparse_array(indices, len(self.genome), scores)
 
         return hits_matrix.transpose(), np.array(dataset_ids), self.transpose_metadata(metadata, technology)
 
