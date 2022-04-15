@@ -26,7 +26,7 @@ class FromCoverage(LISA_Core):
 
     @classmethod
     def using_bigwig(cls, species):
-        passed
+        pass
 
     @classmethod
     def _get_genome_bin_path(cls, species):
@@ -37,7 +37,7 @@ class FromCoverage(LISA_Core):
         
         bedstr = DataInterface.get_window_bedfile_str(species, cls.window_size)
 
-        with open(cls._get_genome_bin_path(species, window_size), 'w') as bed:
+        with open(cls._get_genome_bin_path(species, cls.window_size), 'w') as bed:
             bed.write(bedstr)
 
     @classmethod

@@ -2,7 +2,7 @@
 LISA: Landscape In-Silico deletion Analysis
 *******************************************
 
-.. image:: docs/example_clustermap.png
+.. image:: https://github.com/liulab-dfci/lisa2/blob/master/docs/example_clustermap.png
   :width: 200px
 
 .. contents:: Table of Contents
@@ -18,7 +18,7 @@ The python package is easy to install and has a rich set of features and options
 For a quick introduction to the method, check out the `web interface <http://lisa.cistrome.org/>`_.
 
 The Model
------
+---------
 
 The key components of the LISA test are the:
   1. profile, a distribution of accessibility over regions in the genome, supplied by user or predicted from public data
@@ -29,11 +29,11 @@ First, LISA constructs a null model of gene influence, which assumes each access
 LISA then tests for the influence of a factor on a gene by calculating what proportion of that gene's influence could be attributed to that factor binding nearby regions.
 When you provide genes-of-interest, LISA finds factors that preferentially affects these genes over a sampling of background genes.
 
-.. image:: docs/model_diagram.png
+.. image:: https://github.com/liulab-dfci/lisa2/blob/master/docs/model_diagram.png
   :width: 300
 
-Refer to the `User Guide <docs/user_guide.md>`_ to see it in action. 
-Refer to the `Data Analysis Guide <docs/DataAnalysisGuide.md>`_ to see the questions LISA can help you answer.
+Refer to the `User Guide <https://github.com/liulab-dfci/lisa2/blob/master/docs/user_guide.md>`_ to see it in action. 
+Refer to the `Data Analysis Guide <https://github.com/liulab-dfci/lisa2/blob/master/docs/DataAnalysisGuide.md>`_ to see the questions LISA can help you answer.
 
 Requirements
 ------------
@@ -82,7 +82,7 @@ Then install from Conda:
 Dataset Installation Issues
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-If you successfully install lisa but the program fails while downloading data, follow these `manual dataset installation instructions <docs/troubleshooting.md>`_.
+If you successfully install lisa but the program fails while downloading data, follow these `manual dataset installation instructions <https://github.com/liulab-dfci/lisa2/blob/master/docs/troubleshooting.md>`_.
 
 Usage
 -----
@@ -90,21 +90,26 @@ Usage
 Command Line Interface
 ~~~~~~~~~~~~~~~~~~~~~~
 
-LISA's cli offers convenient methods for the most common use cases. See the `API <docs/cli.rst>`_, or try:
+LISA's cli offers convenient methods for the most common use cases. See the `API <https://github.com/liulab-dfci/lisa2/blob/master/docs/cli.rst>`_, or try:
 
 .. code-block::
 
   (lisa_env) $ lisa {command} --help
 
-for parameter descriptions. See the `User Guide <docs/user_guide.md>`_ for best practices.
+for parameter descriptions. See the `User Guide <https://github.com/liulab-dfci/lisa2/blob/master/docs/user_guide.md>`_ for best practices.
 
 Python Interface
 ~~~~~~~~~~~~~~~~
 
-The python module allows more control over the LISA test and more convenient data analysis. See the `Python API <docs/python_api.rst>`_ and the `User Guide <docs/user_guide.md>`_.
+The python module allows more control over the LISA test and more convenient data analysis. See the `Python API <https://github.com/liulab-dfci/lisa2/blob/master/docs/python_api.rst>`_ 
+and the `User Guide <https://github.com/liulab-dfci/lisa2/blob/master/docs/user_guide.md>`_.
 
 Changelog
 ---------
+
+**[2.2.7] - 2022-03-10**
+
+* Loosening H5py requirements for easier install.
 
 **[2.2.4] - 2021-03-01**
 

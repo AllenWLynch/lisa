@@ -20,7 +20,7 @@ from lisa import FromRegions, FromGenes, FromCoverage
 from lisa.core.utils import Log
 from lisa.core.lisa_core import DownloadRequiredError
 from lisa.core.data_interface import DatasetNotFoundError, INSTALL_PATH
-from lisa._version import __version__
+from lisa import __version__
 import configparser
 import argparse
 import os
