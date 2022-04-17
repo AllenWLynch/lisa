@@ -2,7 +2,7 @@
 LISA: Landscape In-Silico deletion Analysis
 *******************************************
 
-.. image:: https://github.com/liulab-dfci/lisa2/blob/master/docs/example_clustermap.png
+.. image:: https://raw.githubusercontent.com/liulab-dfci/lisa2/master/docs/example_clustermap.png
   :width: 200px
 
 .. contents:: Table of Contents
@@ -29,7 +29,7 @@ First, LISA constructs a null model of gene influence, which assumes each access
 LISA then tests for the influence of a factor on a gene by calculating what proportion of that gene's influence could be attributed to that factor binding nearby regions.
 When you provide genes-of-interest, LISA finds factors that preferentially affects these genes over a sampling of background genes.
 
-.. image:: https://github.com/liulab-dfci/lisa2/blob/master/docs/model_diagram.png
+.. image:: https://raw.githubusercontent.com/liulab-dfci/lisa2/master/docs/model_diagram.png
   :width: 300
 
 Refer to the `User Guide <https://github.com/liulab-dfci/lisa2/blob/master/docs/user_guide.md>`_ to see it in action. 

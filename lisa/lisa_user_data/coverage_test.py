@@ -12,7 +12,6 @@ from lisa.lisa_user_data.assays import ISD_Assay
 from lisa.core.data_interface import DataInterface
 from collections import Counter
 from lisa.core.utils import Log, LoadingBar
-import pyBigWig as bw
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__),'config.ini')
 _config = configparser.ConfigParser()
@@ -90,6 +89,15 @@ For more, see `User Guide <user_guide.md>`_.
 
     @classmethod
     def convert_bigwig(cls, bigwig, species, log = None):
+
+        try:
+            import pyBigWig as bw
+        except ImportError:
+            raise ModuleNotFoundError('pyBigWig is required to use this command, but as of LISA 2.3.0 it is not\n'
+                                      ' installed with the base package because its compiled C components\n'
+                                      ' cause problems on some systems. To install the the version of LISA\n'
+                                      ' where this command can be used, do:'
+                                      ' \n\t $ pip install lisa2[coverage]\n')
 
         if log is None:
             log = Log()
