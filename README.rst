@@ -107,9 +107,23 @@ and the `User Guide <https://github.com/liulab-dfci/lisa2/blob/master/docs/user_
 Changelog
 ---------
 
-**[2.2.7] - 2022-03-10**
+**[2.3.0] - 2022-03-15**
+
+Removed
+~~~~~~~
+
+Removed coverage test from base LISA install because pyBigWig was causing problems with installation. 
+Now, to install the coverage test, do 
+  
+.. code-block:: bash
+
+  $ pip install lisa2[coverage]
+
+Changed
+~~~~~~~
 
 * Loosening H5py requirements for easier install.
+
 
 **[2.2.4] - 2021-03-01**
 

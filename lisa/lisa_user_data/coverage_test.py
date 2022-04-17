@@ -93,11 +93,11 @@ For more, see `User Guide <user_guide.md>`_.
         try:
             import pyBigWig as bw
         except ImportError:
-            raise ModuleNotFoundError('pyBigWig is required to use this command, but as of LISA 2.3.0 it is not\n'
-                                      ' installed with the base package because its compiled C components\n'
-                                      ' cause problems on some systems. To install the the version of LISA\n'
+            raise ModuleNotFoundError('pyBigWig is required to use this command, but as of LISA 2.3.0 it is not'
+                                      ' installed with the base package because its compiled C components'
+                                      ' cause problems on some systems. To install the the version of LISA'
                                       ' where this command can be used, do:'
-                                      ' \n\t $ pip install lisa2[coverage]\n')
+                                      '\n\n\t $ pip install lisa2[coverage]\n')
 
         if log is None:
             log = Log()
