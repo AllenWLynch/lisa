@@ -178,7 +178,7 @@ class LISA_Core:
                     query_names.append(label_dict[loc][1])
 
 
-        return np.array(gene_mask), np.array(label_vector).astype(np.bool), dict(
+        return np.array(gene_mask), np.array(label_vector).astype(bool), dict(
             query_symbols = query_names,
             background_symbols = background_names,
         )
@@ -239,7 +239,7 @@ class LISA_Core:
     def _combine_tests(p_vals, weights=None):
         #https://arxiv.org/abs/1808.09011
         #combine p-values from all assays
-        p_vals = np.array(p_vals).astype(np.float64)
+        p_vals = np.array(p_vals).astype(float)
 
         assert(len(p_vals.shape) == 2 ), 'P-values must be provided as matrix of (samples, multiple p-values)'
         assert(p_vals.shape[1] > 1), 'Must have multiple p-values to combine'

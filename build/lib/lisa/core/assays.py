@@ -13,7 +13,7 @@ def get_delta_RP(profile, binding_data, rp_map):
 
     returns: gene x TF x 1 matrix of delta RPs
     '''
-    return np.array(rp_map.dot(binding_data.astype(np.bool).multiply(profile.reshape((-1,1)))).todense())
+    return np.array(rp_map.dot(binding_data.astype(bool).multiply(profile.reshape((-1,1)))).todense())
 
 #distributes arguments for get_delta_RP function, to be used by multiprocessing module
 def delta_RP_wrapper(x):
@@ -79,8 +79,8 @@ class LISA_RP_Assay:
         gene_TF_scores: gene x TF, model output of delta-RP matrix. more purturbation of genes of interest correspond with higher delta regulation score
         '''
         #seperate matrix into query and background sets
-        query_delta = gene_TF_scores[label_vector.astype(np.bool)]
-        background_delta = gene_TF_scores[~label_vector.astype(np.bool)]
+        query_delta = gene_TF_scores[label_vector.astype(bool)]
+        background_delta = gene_TF_scores[~label_vector.astype(bool)]
 
         #for each TF, calculate p-value of difference in delta-R distributions between query and background genes
         test_parameters = list(zip(query_delta.T, background_delta.T))
@@ -96,7 +96,7 @@ class LISA_RP_Assay:
     @staticmethod
     def get_delta_reg_score_matrix(p_values, delta_reg_scores, label_vector, top_n = 100):
 
-        label_vector = label_vector.astype(np.bool)
+        label_vector = label_vector.astype(bool)
         
         most_significant_datasets = np.argsort(p_values)[:top_n]
         narrowed_reg_scores = delta_reg_scores[:, most_significant_datasets]

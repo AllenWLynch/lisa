@@ -345,7 +345,7 @@ For more, see `User Guide <user_guide.md>`_.
                 .format(str(len(self.region_set)), str(self.num_regions_supplied))
             
             try:
-                region_scores = np.array(region_scores).astype(np.float64)
+                region_scores = np.array(region_scores).astype(float)
             except ValueError as err:
                 raise AssertionError('Region score could not be cast to float: ' + str(err))
 

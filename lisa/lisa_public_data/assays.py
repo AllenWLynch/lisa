@@ -128,7 +128,7 @@ class Accesibility_Assay(LISA_RP_Assay):
         dataset_coefs = dataset_coefs.reshape(-1)
         dataset_coefs_mask = dataset_coefs > 0
         if dataset_coefs_mask.sum() == 0:
-            dataset_coefs_mask = np.ones_like(dataset_coefs).astype(np.bool)
+            dataset_coefs_mask = np.ones_like(dataset_coefs).astype(bool)
 
         coef_weights = dataset_coefs[dataset_coefs_mask]/dataset_coefs[dataset_coefs_mask].sum()
         factor_acc_z_scores = np.mean(np.multiply(factor_acc_z_scores[:, dataset_coefs_mask], coef_weights.reshape(1,-1)), axis = 1)

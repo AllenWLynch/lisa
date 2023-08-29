@@ -11,7 +11,6 @@ common_options = dict(
         save_metadata = ['', '--save_metadata'],
         assays = ['--assays ' + a for a in ['DNase H3K27ac Direct', 'Direct', 'DNase']],
         verbose = '-v 3',
-        cores = '-c 10',
     )
 
 new_test_badge = '''

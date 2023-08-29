@@ -152,9 +152,9 @@ class DataInterface:
             exons = genome_tools.RegionSet(exons, self.genome)
             region_exon_map = region_set.map_intersects(exons, distance_function = lambda x,y : x.overlaps(y, min_overlap_proportion=0.4),slop_distance=0) #REGIONS X EXONS
 
-            region_exon_map = region_exon_map.dot(exon_gene_map).astype(np.bool)
+            region_exon_map = region_exon_map.dot(exon_gene_map).astype(bool)
 
-            not_exon_promoter = 1 - region_exon_map.sum(axis = 1).astype(np.bool)
+            not_exon_promoter = 1 - region_exon_map.sum(axis = 1).astype(bool)
 
             basic_rp_map = self._make_basic_rp_map(gene_loc_set, region_set, decay)
 
@@ -204,7 +204,7 @@ class DataInterface:
 
             group.create_dataset('indptr', data = rp_map.indptr, dtype = np.int32, compression=COMPRESSION)
             group.create_dataset('indices', data = rp_map.indices, dtype = np.int32, compression=COMPRESSION)
-            group.create_dataset('data', data = rp_map.data, dtype = np.float32, compression=COMPRESSION)
+            group.create_dataset('data', data = rp_map.data, dtype = float, compression=COMPRESSION)
 
             self.set_attributes(group,dict(shape = rp_map.shape))
 
@@ -304,7 +304,7 @@ class DataInterface:
             
             if not hit_scores is None:
                 assert(len(hit_bins) == len(hit_scores))
-                scores = data.create_dataset(scores_path, data = np.array(hit_scores), dtype = np.float64, compression=COMPRESSION)
+                scores = data.create_dataset(scores_path, data = np.array(hit_scores), dtype = float, compression=COMPRESSION)
 
             self.set_attributes(hits, metadata)
 
@@ -396,6 +396,7 @@ class DataInterface:
             if profile_path in data:
                 del data[profile_path]
             
+            print('here', np.float16)
             hits = data.create_dataset(profile_path, data = profile, dtype = np.float16, compression=COMPRESSION)
             self.set_attributes(hits, metadata)
 
@@ -406,7 +407,7 @@ class DataInterface:
                 if rp_matrix_path in data:
                     del data[rp_matrix_path]
 
-                rp_matrix_col = data.create_dataset(rp_matrix_path, data = rp_map.dot(profile), dtype = np.float32, compression=COMPRESSION)
+                rp_matrix_col = data.create_dataset(rp_matrix_path, data = rp_map.dot(profile), dtype = float, compression=COMPRESSION)
                 self.set_attributes(rp_matrix_col, metadata)
 
     def remove_profile(self, technology, dataset_id):
